@@ -1,0 +1,16 @@
+{% import "memory_constraints.jinja" as constraints %}
+{% import "memory_preferences.jinja" as preferences %}
+{% import "memory_failures.jinja" as failures %}
+{% import "memory_heuristics.jinja" as heuristics %}
+
+{% macro render_memory_for_agent(agent_role, memories) %}
+{% if agent_role == "buddy" %}
+{{ preferences.render_preferences(memories) }}
+{{ heuristics.render_heuristics(memories) }}
+{% elif agent_role == "kairos" %}
+{{ constraints.render_constraints(memories) }}
+{% elif agent_role == "ultraplan" %}
+{{ constraints.render_constraints(memories) }}
+{{ failures.render_failures(memories) }}
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,11 @@
+{% macro render_failures(memories, max_blocks=10) %}
+### Past Failures (avoid these patterns)
+{% for m in (memories or []) if "failure" in (m.tags or []) %}
+{% if loop.index <= max_blocks %}
+- [importance: {{ m.importance }}] {{ m.summary }}
+{% if m.prompt_fragment %}
+  {{ m.prompt_fragment }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endmacro %}

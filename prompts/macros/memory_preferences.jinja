@@ -1,0 +1,11 @@
+{% macro render_preferences(memories, max_blocks=10) %}
+### User Preferences
+{% for m in (memories or []) if "preference" in (m.tags or []) %}
+{% if loop.index <= max_blocks %}
+- {{ m.summary }}
+{% if m.prompt_fragment %}
+  {{ m.prompt_fragment }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endmacro %}

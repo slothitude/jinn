@@ -1,0 +1,9 @@
+{% macro render_tool_read() %}
+Tool: read
+Description: Read file contents
+Cost Estimate: low
+Input Schema:
+  path: string (required)
+  offset: number (optional)
+  limit: number (optional)
+{% endmacro %}

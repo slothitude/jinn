@@ -1,0 +1,24 @@
+[project]
+name = "jinn"
+version = "0.1.0"
+description = "Programmable Cognition System — not a chatbot"
+requires-python = ">=3.11"
+dependencies = [
+    "jinja2>=3.1",
+    "pydantic>=2.0",
+    "aiofiles>=23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
