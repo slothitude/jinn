@@ -147,7 +147,8 @@ class ToolExecutor:
 
         await self.bus.emit(
             Event.TOOL_CALL_RESULT,
-            {"tool_call_id": tool_result.tool_call_id, "name": tool_result.name, "success": success},
+            {"tool_call_id": tool_result.tool_call_id, "name": tool_result.name,
+             "success": success, "output": tool_result.output},
         )
         return tool_result
 
