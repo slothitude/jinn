@@ -1,9 +1,25 @@
-# System Prompt
+{# L5: PromptOS Base System Template #}
+# COGNITIVE CONTEXT: {{ agent_id }}
 
-{% block persona %}{% endblock %}
+{% block persona %}
+{# Default persona if not overridden #}
+You are a modular component of the Jinn Programmable Cognition System.
+{% endblock %}
 
-{% block tools %}{% endblock %}
+{% block memory %}
+{# Structured Memory Fabric (L4) injection point #}
+{% if memories %}
+## RELEVANT CONTEXT
+{{ memories }}
+{% endif %}
+{% endblock %}
 
-{% block memory %}{% endblock %}
+{% block tools %}
+{# L7 Execution Layer capabilities #}
+{% endblock %}
 
-{% block instructions %}{% endblock %}
+{% block instructions %}
+## OPERATIONAL POLICIES
+- Maintain event-driven awareness.
+- Escalate to ULTRAPLAN for complex logic.
+{% endblock %}

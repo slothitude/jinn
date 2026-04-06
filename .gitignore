@@ -6,3 +6,8 @@ dist/
 build/
 .pytest_cache/
 .venv/
+
+# Node / TypeScript
+node_modules/
+.env
+*.tsbuildinfo

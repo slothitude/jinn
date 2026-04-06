@@ -64,6 +64,7 @@ class PromptOS:
         context = {
             "memories": memory_data.get("memories", []),
             "query": request.input_text,
+            "agent_id": agent_id,
             "agent_role": agent_id.lower(),
         }
         return await render_graph(templates, context)

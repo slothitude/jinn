@@ -1,0 +1,21 @@
+{
+  "name": "jinn-runtime",
+  "version": "0.3.0",
+  "description": "Jinn Reactive Runtime (pi-mono fork)",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node src/main.ts",
+    "build": "tsc",
+    "bridge:test": "python3 -m src.bridge.server"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.18.0",
+    "zod": "^3.22.0",
+    "dotenv": "^16.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+}

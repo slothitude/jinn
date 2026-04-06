@@ -6,7 +6,7 @@ from src.core.models import AgentRequest
 @pytest.mark.asyncio
 async def test_render_graph_basic():
     result = await render_graph(["base/system"], {})
-    assert "System Prompt" in result
+    assert "COGNITIVE CONTEXT" in result
 
 
 @pytest.mark.asyncio
