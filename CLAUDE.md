@@ -31,17 +31,19 @@ JINN is a programmable cognition system — a multi-agent framework with an even
 ### Request flow
 
 `main.py` wires everything. A user input flows through `QueryEngine.process()`:
-1. **PolicyEngine** — keyword-based intent matching routes to an agent, selects model tier and memory strategy
-2. **Memory retrieval** — tag-filtered SQLite lookup with composite ranking (relevance 0.4 + importance 0.3 + recency 0.2 + policy 0.1)
-3. **PromptOS** — Jinja2 template assembly from `prompts/` (base → agent-specific → macros → tools → flows)
-4. **Agent execution** — `BaseAgent.execute()` calls `self.stream_llm(prompt)` for real LLM streaming via the provider, falling back to mock simulation on error. Returns an `AsyncGenerator[str, None]`.
-5. **EventBus** — broadcasts typed `Event` enum values (`TURN_START`, `AGENT_CHUNK`, `AGENT_END`, `TURN_END`, etc.)
+1. **PolicyEngine** — keyword-based intent matching + complexity-based escalation (threshold 0.8) routes to an agent.
+2. **Memory retrieval** — tag-filtered SQLite lookup with composite ranking (relevance 0.4 + importance 0.3 + recency 0.2 + policy 0.1).
+3. **PromptOS** — Jinja2 template assembly from `prompts/` (base → agent-specific → macros like `strategy.jinja`).
+4. **Agent execution** — `BaseAgent.execute(prompt, state)` streams LLM content. 
+5. **Plan Detection** — If `ULTRAPLAN` is used and outputs a `PlanGraph` JSON, `QueryEngine` parses it into `AgentState.execution_graph` and auto-transitions to `BUDDY`.
+6. **Multi-step Execution** — `BUDDY` iterates through the `PlanGraph` nodes, updating status and streaming each step.
+7. **EventBus** — broadcasts typed `Event` enum values (`TURN_START`, `AGENT_CHUNK`, `KAIROS_INTERRUPT`, etc.)
 
 ### Agents
 
-- **BUDDY** (`src/agents/buddy.py`) — default collaborative engineering assistant
-- **ULTRAPLAN** (`src/agents/ultraplan.py`) — heavy planning / task decomposition
-- **KAIROS** (`src/agents/kairos.py`) — monitoring agent; subscribes to `agent_chunk` events for anomaly detection, can interrupt via `steer()`
+- **BUDDY** (`src/agents/buddy.py`) — Default collaborative assistant. Now supports `PlanGraph` execution, listening for `KAIROS_INTERRUPT` to pause or redirect mid-plan.
+- **ULTRAPLAN** (`src/agents/ultraplan.py`) — Heavy architecture agent. Uses `strategy.jinja` macros for atomic decomposition, risk assessment (analyzing past failures from memory), and compute budgeting. Outputs a JSON `PlanGraph`.
+- **KAIROS** (`src/agents/kairos.py`) — Real-time monitor. Subscribes to `AGENT_CHUNK` events and checks `AgentState` for plan-level risks. Emits `KAIROS_INTERRUPT` to stop agents when anomalies (textual or structural) are detected.
 
 All agents extend `BaseAgent` (abstract `execute()` + `stream_llm()` helper + optional `steer()` interrupt hook).
 

@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 
 from src.agents.base import BaseAgent
 from src.core.bus import EventBus
-from src.core.models import Event
+from src.core.models import AgentState, Event
 
 
 class UltraplanAgent(BaseAgent):
@@ -12,7 +12,7 @@ class UltraplanAgent(BaseAgent):
     def __init__(self, bus: EventBus) -> None:
         super().__init__("ULTRAPLAN", bus)
 
-    async def execute(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def execute(self, prompt: str, state: AgentState | None = None) -> AsyncGenerator[str, None]:
         await self.bus.emit(Event.AGENT_START, {"agent": self.name})
 
         try:

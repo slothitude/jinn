@@ -1,0 +1,25 @@
+{# L3/L6: ULTRAPLAN Strategy Engine #}
+
+{% macro render_decomposition(task) %}
+### PHASE 1: ATOMIC DECOMPOSITION
+Break the following task into independent nodes:
+- Task: {{ task }}
+- Constraint: Each node must be testable via BASH or READ tool.
+{% endmacro %}
+
+{% macro render_risk_assessment(memories) %}
+### PHASE 2: RISK & REGRET ANALYSIS
+Analyze past failures in the Memory Fabric:
+{% for m in memories if "failure" in m.tags %}
+- AVOID: {{ m.summary }} (Regret Factor: {{ m.importance }})
+{% endfor %}
+Identify 3 potential "Point of No Return" moments in the current plan.
+{% endmacro %}
+
+{% macro render_cost_control() %}
+### PHASE 3: COMPUTE BUDGETING
+Estimate the 'Cognitive Token' cost for each sub-task:
+1. Low (Single Tool Call)
+2. Medium (Iterative Debugging)
+3. High (Requires KAIROS constant monitoring)
+{% endmacro %}

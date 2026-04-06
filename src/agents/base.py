@@ -7,13 +7,18 @@ from src.core.bus import EventBus
 from src.core.provider import default_client, default_model, stream_chat
 
 
+from src.core.models import AgentState
+
+
 class BaseAgent(ABC):
     def __init__(self, name: str, bus: EventBus) -> None:
         self.name = name
         self.bus = bus
 
     @abstractmethod
-    async def execute(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def execute(
+        self, prompt: str, state: AgentState | None = None
+    ) -> AsyncGenerator[str, None]:
         pass
 
     async def steer(self, message: str) -> None:

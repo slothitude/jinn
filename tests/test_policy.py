@@ -12,7 +12,7 @@ from src.agents.kairos import KairosAgent
 @pytest.mark.asyncio
 async def test_policy_routes_to_ultraplan():
     engine = PolicyEngine()
-    req = AgentRequest(session_id="test", input_text="write a plan for the new feature")
+    req = AgentRequest(session_id="test", input_text="write a plan for the complex architecture migration of our full-stack database design and security audit. " + "We need a comprehensive strategy covering database schema migration, full-stack application changes, security audit procedures, and rollback mechanisms. " * 10)
     decision = await engine.decide(req)
     assert decision.agent_id == "ULTRAPLAN"
     assert decision.model_route == "opus"

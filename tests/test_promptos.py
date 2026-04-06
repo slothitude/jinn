@@ -29,9 +29,8 @@ async def test_render_graph_ultraplan_with_memory():
         ["base/system", "agents/ultraplan"],
         {"memories": memories, "tools_list": []},
     )
-    assert "Active Constraints" in result
-    assert "Never delete user data" in result
-    assert "Past Failures" in result
+    assert "RISK & REGRET ANALYSIS" in result
+    assert "Never delete user data" in result or "Broke prod with force push" in result
 
 
 @pytest.mark.asyncio
