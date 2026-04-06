@@ -14,6 +14,8 @@ class Event(str, Enum):
     AGENT_END = "agent_end"
     KAIROS_INTERRUPT = "kairos_interrupt"
     MEMORY_UPDATE = "memory_update"
+    TOOL_CALL_REQUEST = "tool_call_request"
+    TOOL_CALL_RESULT = "tool_call_result"
 
 
 @dataclass
@@ -60,3 +62,16 @@ class PolicyDecision(BaseModel):
     agent_id: str = "BUDDY"
     model_route: str = "sonnet"
     memory_strategy: str = "standard"
+
+
+class ToolCall(BaseModel):
+    id: str
+    name: str
+    arguments: str
+
+
+class ToolResult(BaseModel):
+    tool_call_id: str
+    name: str
+    output: str
+    success: bool = True

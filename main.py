@@ -7,6 +7,7 @@ from src.core.query_engine import QueryEngine
 from src.agents.buddy import BuddyAgent
 from src.agents.kairos import KairosAgent
 from src.agents.ultraplan import UltraplanAgent
+from src.execution.toolbox import ToolExecutor
 from src.memory.store import MemoryStore
 from src.memory.retrieval import retrieve as memory_retrieve
 from src.memory.autodream import AutoDream
@@ -29,6 +30,10 @@ async def main() -> None:
 
     # Wire KAIROS as monitor on other agents' output
     bus.subscribe(Event.AGENT_CHUNK, kairos.on_agent_chunk, priority=10)
+
+    # L7: Tool Execution
+    tool_executor = ToolExecutor(bus)
+    buddy.set_tool_executor(tool_executor)
 
     # L8: Feedback
     trace_logger = TraceLogger()

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import AsyncGenerator
 
 from src.core.bus import EventBus
-from src.core.provider import default_client, default_model, stream_chat
+from src.core.provider import default_client, default_model, stream_chat, StreamEvent, stream_chat_with_tools
 
 
 from src.core.models import AgentState
@@ -43,3 +43,21 @@ class BaseAgent(ABC):
             messages=messages,
         ):
             yield token
+
+    async def stream_llm_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        model: str | None = None,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream from the configured LLM provider with tool support.
+
+        Yields StreamEvent objects (content or tool_call).
+        """
+        async for event in stream_chat_with_tools(
+            client=default_client,
+            model=model or default_model,
+            messages=messages,
+            tools=tools,
+        ):
+            yield event

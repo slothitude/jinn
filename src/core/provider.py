@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass
-from typing import AsyncGenerator
+from dataclasses import dataclass, field
+from typing import AsyncGenerator, Any, Dict, List
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -55,6 +56,76 @@ async def stream_chat(
             yield delta.content
 
 
+@dataclass
+class StreamEvent:
+    """A single event from a streaming chat completion with tool support."""
+    type: str  # "content" or "tool_call"
+    content: str = ""
+    tool_call_id: str = ""
+    tool_call_name: str = ""
+    tool_call_arguments: str = ""
+
+
+async def stream_chat_with_tools(
+    client: AsyncOpenAI,
+    model: str,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+    **kwargs,
+) -> AsyncGenerator[StreamEvent, None]:
+    """Stream a chat completion with tool support.
+
+    Yields StreamEvent objects. Accumulates tool_call fragments across
+    streaming chunks and emits complete tool call events after the stream ends.
+    """
+    create_kwargs: dict[str, Any] = {**kwargs}
+    if tools:
+        create_kwargs["tools"] = tools
+
+    stream = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        stream=True,
+        **create_kwargs,
+    )
+
+    # Accumulate tool call fragments: id -> {id, name, arguments}
+    tool_call_acc: Dict[int, Dict[str, str]] = {}
+
+    async for chunk in stream:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if not delta:
+            continue
+
+        # Content tokens
+        if delta.content:
+            yield StreamEvent(type="content", content=delta.content)
+
+        # Tool call fragments
+        if delta.tool_calls:
+            for tc_delta in delta.tool_calls:
+                idx = tc_delta.index
+                if idx not in tool_call_acc:
+                    tool_call_acc[idx] = {"id": "", "name": "", "arguments": ""}
+                if tc_delta.id:
+                    tool_call_acc[idx]["id"] = tc_delta.id
+                if tc_delta.function:
+                    if tc_delta.function.name:
+                        tool_call_acc[idx]["name"] += tc_delta.function.name
+                    if tc_delta.function.arguments:
+                        tool_call_acc[idx]["arguments"] += tc_delta.function.arguments
+
+    # Emit complete tool calls
+    for idx in sorted(tool_call_acc):
+        tc = tool_call_acc[idx]
+        yield StreamEvent(
+            type="tool_call",
+            tool_call_id=tc["id"],
+            tool_call_name=tc["name"],
+            tool_call_arguments=tc["arguments"],
+        )
+
+
 async def complete_chat(
     client: AsyncOpenAI,
     model: str,
@@ -69,6 +140,13 @@ async def complete_chat(
         **kwargs,
     )
     return response.choices[0].message.content or ""
+
+
+async def list_models(client: AsyncOpenAI | None = None) -> list[str]:
+    """List available model IDs from the provider."""
+    c = client or default_client
+    models = await c.models.list()
+    return sorted(m.id for m in models.data)
 
 
 # Module-level singleton for convenience

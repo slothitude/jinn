@@ -184,3 +184,5 @@ def test_event_enum_values():
     assert Event.AGENT_END == "agent_end"
     assert Event.KAIROS_INTERRUPT == "kairos_interrupt"
     assert Event.MEMORY_UPDATE == "memory_update"
+    assert Event.TOOL_CALL_REQUEST == "tool_call_request"
+    assert Event.TOOL_CALL_RESULT == "tool_call_result"

@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from jinja2 import ChoiceLoader, FileSystemLoader
 from jinja2.nativetypes import NativeEnvironment
+
+if TYPE_CHECKING:
+    from src.execution.toolbox import ToolSchema
 
 # Resolve prompts directory relative to project root
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
@@ -49,6 +54,13 @@ async def render_graph(
 class PromptOS:
     """L5 Cognitive Assembly — stitches memory into reasoning context via Jinja2."""
 
+    def __init__(self, tools: Optional[List[ToolSchema]] = None) -> None:
+        if tools is None:
+            from src.execution.toolbox import DEFAULT_TOOLS
+            self.tools: List[ToolSchema] = DEFAULT_TOOLS
+        else:
+            self.tools = tools
+
     async def assemble(
         self,
         request: "AgentRequest",
@@ -66,5 +78,6 @@ class PromptOS:
             "query": request.input_text,
             "agent_id": agent_id,
             "agent_role": agent_id.lower(),
+            "tools_list": self.tools,
         }
         return await render_graph(templates, context)

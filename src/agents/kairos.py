@@ -3,16 +3,31 @@ from typing import AsyncGenerator
 
 from src.agents.base import BaseAgent
 from src.core.bus import EventBus
-from src.core.models import AgentState, Event
+from src.core.models import AgentState, Event, EventCancelled
 
 
 class KairosAgent(BaseAgent):
     """Interrupt-driven monitoring agent — watches executions, intervenes on anomalies."""
 
+    _dangerous_patterns = (
+        "rm -rf /",
+        "rm -rf /*",
+        "del /",
+        "format c:",
+        "mkfs.",
+        "dd if=",
+        ":(){:|:&};:",
+        "> /dev/sda",
+        "chmod -R 777 /",
+        "wget.*|.*sh",
+        "curl.*|.*sh",
+    )
+
     def __init__(self, bus: EventBus) -> None:
         super().__init__("KAIROS", bus)
         self._anomaly_keywords = {"error", "timeout", "forbidden", "unsafe", "exception"}
         self.current_state: AgentState | None = None
+        self.bus.subscribe(Event.TOOL_CALL_REQUEST, self.on_tool_call_request, priority=0)
 
     async def execute(self, prompt: str, state: AgentState | None = None) -> AsyncGenerator[str, None]:
         self.current_state = state
@@ -40,6 +55,23 @@ class KairosAgent(BaseAgent):
                 return True # Out of bounds
                 
         return False
+
+    async def on_tool_call_request(self, payload: dict) -> None:
+        """Pre-execution safety gate — block dangerous commands."""
+        name = payload.get("name", "")
+        if name != "bash":
+            return
+
+        import json
+        try:
+            args = json.loads(payload.get("arguments", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        command = args.get("command", "").lower()
+        for pattern in self._dangerous_patterns:
+            if pattern in command:
+                raise EventCancelled(f"KAIROS blocked dangerous command: {command}")
 
     async def on_agent_chunk(self, payload: dict) -> None:
         """EventBus subscriber — monitors other agents' output for anomalies."""
