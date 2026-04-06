@@ -2,6 +2,7 @@ import time
 from typing import List, Optional
 
 from src.core.bus import EventBus
+from src.core.models import Event
 from src.memory.schema import MemoryUnit
 from src.memory.store import MemoryStore
 
@@ -23,7 +24,7 @@ class AutoDream:
     def __init__(self, bus: EventBus, store: MemoryStore) -> None:
         self.bus = bus
         self.store = store
-        self.bus.subscribe("agent_end", self.on_agent_end, priority=80)
+        self.bus.subscribe(Event.AGENT_END, self.on_agent_end, priority=80)
 
     async def on_agent_end(self, payload: dict) -> None:
         """Triggered when any agent finishes execution."""
@@ -49,7 +50,7 @@ class AutoDream:
                 pruned += 1
 
         if pruned > 0:
-            await self.bus.emit("memory_update", {"pruned": pruned, "remaining": self.store.count()})
+            await self.bus.emit(Event.MEMORY_UPDATE, {"pruned": pruned, "remaining": self.store.count()})
 
     def extract_from_session(self, history: List[dict]) -> List[MemoryUnit]:
         """Extract candidate memory units from conversation history.

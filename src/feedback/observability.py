@@ -1,4 +1,5 @@
 from src.core.bus import EventBus
+from src.core.models import Event
 from src.feedback.trace_logger import DecisionTrace, TraceLogger
 
 
@@ -36,10 +37,10 @@ async def trace_recorder(payload: dict, trace_logger: TraceLogger) -> None:
 
 def register_feedback_hooks(bus: EventBus, trace_logger: TraceLogger | None = None) -> None:
     """Wire all feedback hooks into the EventBus at appropriate priorities."""
-    bus.subscribe("agent_chunk", safety_monitor, priority=0)
-    bus.subscribe("agent_end", metrics_logger, priority=100)
+    bus.subscribe(Event.AGENT_CHUNK, safety_monitor, priority=0)
+    bus.subscribe(Event.AGENT_END, metrics_logger, priority=100)
 
     if trace_logger:
         async def _trace_recorder(payload):
             await trace_recorder(payload, trace_logger)
-        bus.subscribe("turn_end", _trace_recorder, priority=50)
+        bus.subscribe(Event.TURN_END, _trace_recorder, priority=50)

@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 from src.core.bus import EventBus
-from src.core.models import AgentRequest, AgentState
+from src.core.models import AgentRequest, AgentState, Event
 from src.core.query_engine import QueryEngine
 from src.agents.buddy import BuddyAgent
 from src.agents.kairos import KairosAgent
@@ -28,7 +28,7 @@ async def main() -> None:
     ultraplan = UltraplanAgent(bus)
 
     # Wire KAIROS as monitor on other agents' output
-    bus.subscribe("agent_chunk", kairos.on_agent_chunk, priority=10)
+    bus.subscribe(Event.AGENT_CHUNK, kairos.on_agent_chunk, priority=10)
 
     # L8: Feedback
     trace_logger = TraceLogger()

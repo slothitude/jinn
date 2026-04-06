@@ -3,7 +3,7 @@ import tempfile
 import pytest
 
 from src.core.bus import EventBus
-from src.core.models import AgentRequest, AgentState
+from src.core.models import AgentRequest, AgentState, Event
 from src.core.query_engine import QueryEngine
 from src.agents.buddy import BuddyAgent
 from src.agents.kairos import KairosAgent
@@ -81,10 +81,10 @@ async def test_event_bus_priority():
     async def second(payload):
         order.append("second")
 
-    bus.subscribe("test_event", second, priority=100)
-    bus.subscribe("test_event", first, priority=0)
+    bus.subscribe(Event.AGENT_CHUNK, second, priority=100)
+    bus.subscribe(Event.AGENT_CHUNK, first, priority=0)
 
-    await bus.emit("test_event", {})
+    await bus.emit(Event.AGENT_CHUNK, {})
     assert order == ["first", "second"]
 
 

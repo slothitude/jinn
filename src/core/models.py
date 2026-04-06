@@ -1,5 +1,31 @@
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List
+
 from pydantic import BaseModel, Field
+
+
+class Event(str, Enum):
+    """Typed event names for the EventBus."""
+    TURN_START = "turn_start"
+    TURN_END = "turn_end"
+    AGENT_START = "agent_start"
+    AGENT_CHUNK = "agent_chunk"
+    AGENT_END = "agent_end"
+    KAIROS_INTERRUPT = "kairos_interrupt"
+    MEMORY_UPDATE = "memory_update"
+
+
+@dataclass
+class EventResult:
+    """Result of an emit() call — delivery count, cancellation state, collected errors."""
+    delivered: int
+    cancelled: bool = False
+    errors: List[Exception] = field(default_factory=list)
+
+
+class EventCancelled(Exception):
+    """Raise in a subscriber to cancel event propagation to lower-priority subscribers."""
 
 
 class AgentRequest(BaseModel):

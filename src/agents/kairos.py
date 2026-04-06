@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 
 from src.agents.base import BaseAgent
 from src.core.bus import EventBus
+from src.core.models import Event
 
 
 class KairosAgent(BaseAgent):
@@ -13,16 +14,16 @@ class KairosAgent(BaseAgent):
         self._anomaly_keywords = {"error", "timeout", "forbidden", "unsafe", "exception"}
 
     async def execute(self, prompt: str) -> AsyncGenerator[str, None]:
-        await self.bus.emit("agent_start", {"agent": self.name})
+        await self.bus.emit(Event.AGENT_START, {"agent": self.name})
 
         response = f"[{self.name}] Monitoring active. No anomalies detected."
         for chunk in response.split(" "):
             await asyncio.sleep(0.02)
             token = chunk + " "
             yield token
-            await self.bus.emit("agent_chunk", {"agent": self.name, "chunk": token})
+            await self.bus.emit(Event.AGENT_CHUNK, {"agent": self.name, "chunk": token})
 
-        await self.bus.emit("agent_end", {"agent": self.name})
+        await self.bus.emit(Event.AGENT_END, {"agent": self.name})
 
     def detect_anomaly(self, payload: dict) -> bool:
         chunk = payload.get("chunk", "").lower()
@@ -32,6 +33,6 @@ class KairosAgent(BaseAgent):
         """EventBus subscriber — monitors other agents' output for anomalies."""
         if self.detect_anomaly(payload):
             await self.bus.emit(
-                "kairos_interrupt",
+                Event.KAIROS_INTERRUPT,
                 {"source": self.name, "anomaly": payload["chunk"]},
             )

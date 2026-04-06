@@ -1,7 +1,7 @@
 from typing import Any, Callable, Coroutine, Dict, Optional
 
 from src.core.bus import EventBus
-from src.core.models import AgentRequest, AgentState
+from src.core.models import AgentRequest, AgentState, Event
 from src.core.policy_engine import PolicyEngine
 from src.promptos.engine import PromptOS
 from src.agents.base import BaseAgent
@@ -24,7 +24,7 @@ class QueryEngine:
         self.agents[agent.name] = agent
 
     async def process(self, request: AgentRequest, state: AgentState) -> str:
-        await self.bus.emit("turn_start", {"session_id": request.session_id})
+        await self.bus.emit(Event.TURN_START, {"session_id": request.session_id})
 
         # L3: Policy decision
         decision = await self.policy.decide(request)
@@ -52,7 +52,7 @@ class QueryEngine:
         state.history.append({"user": request.input_text, "assistant": full_response})
         state.turn_count += 1
         await self.bus.emit(
-            "turn_end",
+            Event.TURN_END,
             {"session_id": request.session_id, "status": "complete", "agent": decision.agent_id},
         )
         return full_response
