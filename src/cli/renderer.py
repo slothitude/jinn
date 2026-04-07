@@ -194,7 +194,7 @@ class RichOrchestrationRenderer:
             # Add subtitle during final frames
             if phase_ratio > 0.5:
                 grid.append("\n")
-                subtitle = "Programmable Cognition System"
+                subtitle = "Slothitude Games: Jinn"
                 visible = int(len(subtitle) * min(1.0, (phase_ratio - 0.5) * 2))
                 grid.append(" " * ((cols - visible) // 2))
                 grid.append(subtitle[:visible], style="dim white")
