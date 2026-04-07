@@ -80,12 +80,15 @@ Error-isolated, priority-based pub/sub. Lower number = runs first. Safety hooks 
 SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 
 ## Conventions
-
 - Python 3.11+, Pydantic v2 for models, Jinja2 for templates, aiofiles for async I/O
-- `openai>=1.0` for LLM provider, `python-dotenv` for `.env` loading
-- `pytest-asyncio` with `asyncio_mode = "auto"` — test functions can be `async def` directly
+- `openai>=1.0` for LLM provider, `httpx` for reliable async HTTP on Windows; fallback chain: `glm-5.1 → glm-5 → glm-5-turbo → glm-4.7 → glm-4.6 → glm-4.5-air`
+- `pytest-asyncio>=0.23` with `asyncio_mode = "auto"` — test functions can be `async def` directly
 - Agents yield chunks via async generators; never return a single string
 - Use `Event` enum constants (not raw strings) for all event types
 - Policy routing is keyword-based in `POLICY_RULES` list — add new intents there
 - Memory tags determine what each agent sees; role-to-tag mapping lives in the retrieval pipeline
 - `emit()` returns `EventResult` — check `.cancelled` and `.errors` for production error handling
+
+- When no LLM is available, agents fall back to mock simulation (echo fallback at buddy.py:104-114, or ultraplan.py:24-35) — tests run offline via mock
+- To run specific tests: `python tests/test_ultimate.py` (standalone runner, no pytest required)
+- `test_dashboard.py` is excluded from pytest — its `aiohttp` server import hangs during collection
