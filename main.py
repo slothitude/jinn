@@ -138,9 +138,16 @@ async def main() -> None:
             continue
 
         request = AgentRequest(session_id=state.session_id, input_text=user_input)
+
+        if renderer:
+            renderer.set_user_input(user_input)
+
         response = await engine.process(request, state)
-        if renderer is None:
-            print(f"\n{response}\n")
+
+        # Always print the final response so it's visible as scrollback
+        if renderer:
+            renderer.pause()
+        print(f"\n{response}\n")
 
     # Cleanup
     if renderer:

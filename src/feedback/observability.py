@@ -19,8 +19,9 @@ async def safety_monitor(payload: dict) -> None:
 
 async def metrics_logger(payload: dict) -> None:
     """Priority 100 — pure observation, records agent events."""
-    if payload and "agent" in payload:
-        print(f"  [METRICS] Agent {payload['agent']} event recorded.")
+    # Metrics are visual noise when the Rich renderer is active;
+    # the renderer shows agent status directly.
+    pass
 
 
 async def trace_recorder(payload: dict, trace_logger: TraceLogger) -> None:

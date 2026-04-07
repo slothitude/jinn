@@ -73,6 +73,7 @@ class QueryEngine:
         prompt = await self.prompt_os.assemble(request, memory_data, decision.agent_id)
 
         # L6-L7: Execution
+        state.current_input = request.input_text
         agent = self.agents.get(decision.agent_id, self.agents.get("BUDDY"))
         if not agent:
             raise RuntimeError(f"No agent registered for {decision.agent_id}")

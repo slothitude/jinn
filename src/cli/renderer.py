@@ -6,22 +6,24 @@ Observer-only: never modifies agent state or flow.
 
 from __future__ import annotations
 
+import random
 import re
 import sys
 import time
 from dataclasses import dataclass, field
 
-from rich.console import Group
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich.text import Text
-from rich.tree import Tree
 
 from src.cli.themes import (
     AGENT_COLORS,
     AGENT_ICONS,
+    JINN_LOGO,
+    MATRIX_CHARS,
     REFRESH_INTERVAL,
     STATUS_COLORS,
     STATUS_ICONS,
@@ -73,6 +75,7 @@ class RichOrchestrationRenderer:
         self._last_refresh: float = 0.0
         self._live: Live | None = None
         self._running: bool = False
+        self._last_input: str = ""
 
     # -- Lifecycle --
 
@@ -83,8 +86,12 @@ class RichOrchestrationRenderer:
 
         self._running = True
         self._subscribe()
+
+        # Play startup animation before entering normal live loop
+        self._play_startup_animation()
+
         self._live = Live(
-            self._build_banner(),
+            self._build_status_bar(),
             console=None,
             refresh_per_second=15,
             vertical_overflow="visible",
@@ -108,6 +115,106 @@ class RichOrchestrationRenderer:
         """Resume the live display after pause."""
         if self._live is not None and self._running:
             self._live.start()
+
+    def set_user_input(self, text: str) -> None:
+        """Set the current user input to display in the status bar."""
+        self._last_input = text
+
+    # -- Startup animation --
+
+    def _play_startup_animation(self) -> None:
+        """Matrix rain dissolve into JINN logo (~2s animation)."""
+        import shutil
+
+        term_w, term_h = shutil.get_terminal_size((80, 24))
+        logo_width = max(len(line) for line in JINN_LOGO)
+        logo_height = len(JINN_LOGO)
+        cols = min(term_w, 80)
+        rows = min(term_h, 24)
+        logo_col = (cols - logo_width) // 2
+        logo_row = (rows - logo_height) // 2
+
+        # Each column tracks a rain drop: (head_row, length)
+        drops: list[tuple[int, int]] = [(random.randint(0, rows), random.randint(3, rows)) for _ in range(cols)]
+
+        def _make_rain_frame() -> Text:
+            grid = Text()
+            for r in range(rows):
+                for c in range(cols):
+                    head, length = drops[c]
+                    tail_start = head - length
+                    if tail_start <= r <= head:
+                        dist_from_head = head - r
+                        ch = random.choice(MATRIX_CHARS)
+                        if dist_from_head == 0:
+                            grid.append(ch, style="bold bright_green")
+                        elif dist_from_head <= 2:
+                            grid.append(ch, style="green")
+                        else:
+                            grid.append(ch, style="dim green")
+                    else:
+                        grid.append(" ")
+                if r < rows - 1:
+                    grid.append("\n")
+            return grid
+
+        def _make_dissolve_frame(phase_ratio: float) -> Text:
+            grid = Text()
+            for r in range(rows):
+                for c in range(cols):
+                    # Check if this position is in the logo
+                    lr = r - logo_row
+                    lc = c - logo_col
+                    is_logo = (
+                        0 <= lr < logo_height
+                        and 0 <= lc < len(JINN_LOGO[lr])
+                        and JINN_LOGO[lr][lc] != " "
+                    )
+
+                    if is_logo and random.random() < phase_ratio:
+                        # Show logo char
+                        ch = JINN_LOGO[lr][lc]
+                        if phase_ratio > 0.7:
+                            grid.append(ch, style="bold bright_cyan")
+                        else:
+                            grid.append(ch, style="cyan")
+                    elif random.random() < (1.0 - phase_ratio) * 0.3:
+                        # Fading matrix char
+                        ch = random.choice(MATRIX_CHARS)
+                        grid.append(ch, style="dim green")
+                    else:
+                        grid.append(" ")
+                if r < rows - 1:
+                    grid.append("\n")
+
+            # Add subtitle during final frames
+            if phase_ratio > 0.5:
+                grid.append("\n")
+                subtitle = "Programmable Cognition System"
+                visible = int(len(subtitle) * min(1.0, (phase_ratio - 0.5) * 2))
+                grid.append(" " * ((cols - visible) // 2))
+                grid.append(subtitle[:visible], style="dim white")
+            return grid
+
+        console = Console()
+        with Live(console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+            # Phase 1: Matrix rain (~1s, 15 frames)
+            for _ in range(15):
+                for c in range(cols):
+                    head, length = drops[c]
+                    head += random.randint(1, 2)
+                    if head - length > rows:
+                        head = random.randint(0, 3)
+                        length = random.randint(3, rows)
+                    drops[c] = (head, length)
+                live.update(Panel(_make_rain_frame(), style="on black", padding=0))
+                time.sleep(0.066)
+
+            # Phase 2: Dissolve into logo (~1s, 15 frames)
+            for frame in range(15):
+                ratio = (frame + 1) / 15.0
+                live.update(Panel(_make_dissolve_frame(ratio), style="on black", padding=0))
+                time.sleep(0.066)
 
     # -- Event subscriptions --
 
@@ -214,13 +321,13 @@ class RichOrchestrationRenderer:
         if key and key in self._agents:
             self._agents[key].status = "streaming"
 
-        # Accumulate output (last 500 chars)
+        # Accumulate output (keep last ~5000 chars for scrollable view)
         self._output_buffer.append(chunk)
-        if len(self._output_buffer) > 50:
-            self._output_buffer = self._output_buffer[-50:]
+        if len(self._output_buffer) > 100:
+            self._output_buffer = self._output_buffer[-100:]
         total = "".join(self._output_buffer)
-        if len(total) > 500:
-            self._output_buffer = [total[-500:]]
+        if len(total) > 5000:
+            self._output_buffer = [total[-5000:]]
 
         # Detect plan step markers
         step_match = _STEP_RE.search(chunk)
@@ -261,6 +368,8 @@ class RichOrchestrationRenderer:
             if st == "running":
                 self._plan_nodes[max_step] = (desc, "done")
 
+        # Clear output buffer — main.py prints the final response as plain text
+        self._output_buffer.clear()
         self._refresh()
 
     async def on_delegation_start(self, payload: dict) -> None:
@@ -400,80 +509,124 @@ class RichOrchestrationRenderer:
     # -- Rendering --
 
     def _build_composite(self) -> Group:
-        """Build the full composite renderable."""
-        parts: list = [self._build_banner()]
+        """Build the full composite renderable.
+
+        Layout (top to bottom):
+          1. Compact status bar (banner + active agents, 1-2 lines)
+          2. Output panel (takes remaining terminal height)
+          3. Plan progress (if any)
+        """
+        parts: list = []
+
+        # Compact status bar: banner + agent status in one line
+        parts.append(self._build_status_bar())
+
+        # Active agents inline (compact, no tree)
         if self._agents:
-            parts.append(self._build_tree_panel())
+            parts.append(self._build_agents_inline())
+
+        # Output panel — largest element
         if self._output_buffer:
             parts.append(self._build_output_panel())
+
+        # Plan progress (compact)
         if self._plan_nodes:
             parts.append(self._build_plan_progress())
+
         return Group(*parts)
 
-    def _build_banner(self) -> Panel:
-        turn_text = f"turn {self._turn_count}" if self._turn_count else ""
-        title = Text()
-        title.append(" \u26a1 JINN ", style="bold white")
-        title.append("\u00b7", style="dim")
-        title.append("  Programmable Cognition System", style="dim")
-        if turn_text:
-            title.append(f"  {turn_text}", style="bold cyan")
-        return Panel(title, style="bold blue", padding=(0, 2))
+    def _build_status_bar(self) -> Text:
+        """Compact single-line status bar."""
+        bar = Text()
+        bar.append(" \u26a1 JINN ", style="bold white")
+        bar.append(" \u2502 ", style="dim")
+        if self._turn_count:
+            bar.append(f"turn {self._turn_count}", style="bold cyan")
+            bar.append(" \u2502 ", style="dim")
 
-    def _build_tree_panel(self) -> Panel:
-        tree = Tree("")
-        # Find root nodes (no parent)
+        # Show user input if set
+        if self._last_input:
+            bar.append(f"> {self._last_input[:50]}", style="bold yellow")
+            bar.append(" \u2502 ", style="dim")
+
+        # Count active agents
+        active = [n for n in self._agents.values() if n.status in ("thinking", "streaming")]
+        done = [n for n in self._agents.values() if n.status == "done"]
+        if active:
+            names = ", ".join(n.name for n in active[:4])
+            bar.append(f"{len(active)} active: {names}", style="green")
+        elif done:
+            bar.append(f"{len(done)} done", style="dim green")
+        else:
+            bar.append("ready", style="dim")
+        return bar
+
+    def _build_agents_inline(self) -> Text:
+        """Compact multi-line agent status (replaces the full tree panel)."""
+        lines = Text()
+
+        # Show all agents as compact lines
         roots = [k for k, n in self._agents.items() if n.parent_key is None]
         for root_key in roots:
-            self._render_subtree(tree, root_key)
-        return Panel(tree, title="Orchestration", border_style="blue", padding=(0, 1))
+            self._render_agent_inline(lines, root_key, 0)
+        for child_key in sorted(
+            (k for k, n in self._agents.items() if n.parent_key is not None),
+            key=lambda k: self._agents[k].name,
+        ):
+            self._render_agent_inline(lines, child_key, 1)
 
-    def _render_subtree(self, parent: Tree, key: str) -> None:
+        return lines
+
+    def _render_agent_inline(self, out: Text, key: str, indent: int) -> None:
+        """Append a compact single-line agent status."""
         node = self._agents.get(key)
         if node is None:
             return
-        branch = parent.add(self._render_agent_node(node))
-        # Find children
-        children = sorted(
-            [k for k, n in self._agents.items() if n.parent_key == key],
-            key=lambda k: self._agents[k].name,
-        )
-        for child_key in children:
-            self._render_subtree(branch, child_key)
 
-    def _render_agent_node(self, node: AgentNode) -> Text:
         icon = AGENT_ICONS.get(node.agent_type, "\u2022")
         color = AGENT_COLORS.get(node.agent_type, "")
         status_icon = STATUS_ICONS.get(node.status, "\u25cc")
         status_color = STATUS_COLORS.get(node.status, "dim")
 
-        text = Text()
-        text.append(f"  {icon} ", style=color)
-        text.append(node.name, style=color)
-        text.append(f"  {status_icon} {node.status}", style=status_color)
+        pad = "  " + ("  " * indent)
+        out.append(f"{pad}{icon} ", style=color)
+        out.append(node.name, style=color)
+        out.append(f" {status_icon}", style=status_color)
 
-        # Provider line
         if node.provider:
             model_str = f"{node.provider}/{node.model}" if node.model else node.provider
-            text.append(f"  {model_str}", style="dim")
+            out.append(f" {model_str}", style="dim")
 
-        # Elapsed time
-        if node.elapsed and node.status in ("running", "streaming", "thinking"):
-            text.append(f"  {node.elapsed}", style="dim")
+        if node.elapsed and node.status in ("thinking", "streaming"):
+            out.append(f" {node.elapsed}", style="dim")
 
-        # Task description
-        if node.task_desc:
-            text.append(f"\n      {node.task_desc}", style="dim italic")
+        # Last tool call only
+        if node.tool_calls:
+            out.append(f" \u2192 {node.tool_calls[-1]}", style="dim")
 
-        # Tool calls (show last 3)
-        for tc in node.tool_calls[-3:]:
-            text.append(f"\n      {tc}", style="dim")
-
-        return text
+        out.append("\n")
 
     def _build_output_panel(self) -> Panel:
-        text = Text("".join(self._output_buffer[-20:])[-800:])
-        return Panel(text, title="Output", border_style="green", padding=(0, 1))
+        """Output panel sized to content (shown during streaming only)."""
+        raw = "".join(self._output_buffer[-100:])[-5000:]
+        # Strip non-printable characters (keep newlines, tabs, and printable unicode)
+        filtered = "".join(c for c in raw if c.isprintable() or c in "\n\t")
+
+        import shutil
+        _, term_h = shutil.get_terminal_size((80, 24))
+        max_lines = max(term_h - 6, 5)
+
+        # Split into lines and take the last N that fit
+        all_lines = filtered.split("\n")
+        show_lines = all_lines[-max_lines:]
+
+        text = Text("\n".join(show_lines))
+        return Panel(
+            text,
+            title="Output",
+            border_style="green",
+            padding=(0, 1),
+        )
 
     def _build_plan_progress(self) -> Panel:
         if not self._plan_nodes:

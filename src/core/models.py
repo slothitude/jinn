@@ -70,6 +70,7 @@ class AgentState(BaseModel):
     metrics: Dict[str, Any] = Field(default_factory=dict)
     execution_graph: Optional[PlanGraph] = None
     current_node_index: int = 0
+    current_input: str = ""
 
 
 class PolicyDecision(BaseModel):

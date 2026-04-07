@@ -69,7 +69,7 @@ class BuddyAgent(BaseAgent):
                             yield f"\n[FAST PATH FAILED] {result.output}\n"
                             step_prompt += f"\nPrevious tool call ({node.tool}) failed: {result.output}\n"
 
-                    async for token in self._run_tool_loop(step_prompt):
+                    async for token in self._run_tool_loop(step_prompt, state=state):
                         if self._interrupted:
                             node.status = "failed"
                             yield "\n[INTERRUPTED]"
@@ -95,7 +95,7 @@ class BuddyAgent(BaseAgent):
         # Scenario B: Single-shot prompt
         else:
             try:
-                async for token in self._run_tool_loop(prompt):
+                async for token in self._run_tool_loop(prompt, state=state):
                     if self._interrupted:
                         yield "\n[INTERRUPTED]"
                         break
@@ -116,14 +116,35 @@ class BuddyAgent(BaseAgent):
         await self.bus.emit(Event.AGENT_END, {"agent": self.name})
 
     async def _run_tool_loop(
-        self, initial_prompt: str, max_iterations: int = 10
+        self, initial_prompt: str, max_iterations: int = 10,
+        state: AgentState | None = None,
     ) -> AsyncGenerator[str, None]:
         """Agentic tool loop — streams LLM content, executes tool calls, loops.
 
         If no ToolExecutor is wired, falls back to plain stream_llm().
         """
+        user_input = state.current_input if state and state.current_input else initial_prompt
+
+        # Build conversation history from state
+        history_msgs: list[dict] = []
+        if state and state.history:
+            for turn in state.history[-10:]:  # last 10 turns for context window
+                if "user" in turn:
+                    history_msgs.append({"role": "user", "content": turn["user"]})
+                if "assistant" in turn:
+                    history_msgs.append({"role": "assistant", "content": turn["assistant"]})
+
         if self._tool_executor is None:
-            async for token in self.stream_llm(initial_prompt):
+            # Build full message list for the no-tools path
+            no_tool_messages = [
+                {"role": "system", "content": initial_prompt},
+                *history_msgs,
+                {"role": "user", "content": user_input},
+            ]
+            from src.core.provider import stream_chat
+            async for token in stream_chat(
+                client=self._client, model=self._model, messages=no_tool_messages,
+            ):
                 yield token
             return
 
@@ -131,7 +152,11 @@ class BuddyAgent(BaseAgent):
         from src.execution.web_tools import WEB_TOOLS
 
         tools = [t.to_openai_format() for t in DEFAULT_TOOLS + WEB_TOOLS]
-        messages: list[dict] = [{"role": "user", "content": initial_prompt}]
+        messages: list[dict] = [
+            {"role": "system", "content": initial_prompt},
+            *history_msgs,
+            {"role": "user", "content": user_input},
+        ]
 
         for _ in range(max_iterations):
             content_parts: list[str] = []

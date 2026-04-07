@@ -57,5 +57,23 @@ TOOL_ICONS: dict[str, str] = {
     "spawn_workers": "\U0001f465",
 }
 
+# ASCII art JINN logo (block letters, pure ASCII for Windows compat)
+JINN_LOGO: list[str] = [
+    "  _ _____  ___   _ ___  ___ _   _  _  _ _____ _____ ",
+    " | |_   _|/ __| | | __|/ __| | | || \\| |_   _|_   _|",
+    " | | | | | (__  | | _| | (__| |_| || .` | | |   | |  ",
+    " |_| |_|  \\___| |_|___|\\___|\\___/ |_|\\_| |_|   |_|  ",
+    "                                                      ",
+    "  _ _____  ___ _   _ ___  ___ ___ _  _ _____ _____   ",
+    " | |_   _|/ __| | | | __|| __| __| \\| |_   _|_   _|  ",
+    " | | | | | (__| |_| | _| | _|| _|| .` | | |   | |    ",
+    " |_| |_|  \\___|\\___/|___||___|___|_|\\_| |_|   |_|    ",
+]
+
+# Characters for matrix rain effect (ASCII-safe: symbols + hex digits)
+MATRIX_CHARS: str = (
+    "0123456789ABCDEFabcdef@#$%&*+=~-:;!?/\\|<>{}[]()^"
+)
+
 # Max refresh rate (15fps)
 REFRESH_INTERVAL: float = 0.066
