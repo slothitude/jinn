@@ -78,16 +78,39 @@ class PromptOS:
             "BUDDY": ["base/system", "agents/buddy"],
             "KAIROS": ["base/system", "agents/kairos"],
             "ULTRAPLAN": ["base/system", "agents/ultraplan"],
+            "LIBRARIAN": ["base/system", "agents/librarian"],
         }
         templates = template_map.get(agent_id, ["base/system", "agents/buddy"])
         context = {
             "memories": memory_data.get("memories", []),
+            "wiki_pages": memory_data.get("wiki_pages", []),
             "query": request.input_text,
             "agent_id": agent_id,
             "agent_role": agent_id.lower(),
             "tools_list": self.tools,
             "user_permission_level": self.user_permission_level,
-            "wiki_index": self._wiki_store.get_index() if self._wiki_store else {},
+            "wiki_index": self._wiki_store.get_index() if self._wiki_store else memory_data.get("wiki_index", {}),
             "is_plan_execution": request.metadata.get("is_plan_execution", False) if request.metadata else False,
+        }
+        return await render_graph(templates, context)
+
+    async def assemble_librarian(
+        self,
+        raw_content: str,
+        category: str = "General",
+        title: str = "Untitled",
+    ) -> str:
+        """Assemble the Librarian distillation prompt with raw doc content."""
+        templates = ["base/system", "agents/librarian"]
+        context = {
+            "raw_content": raw_content,
+            "category": category,
+            "title": title,
+            "agent_id": "LIBRARIAN",
+            "agent_role": "librarian",
+            "memories": [],
+            "wiki_index": {},
+            "tools_list": [],
+            "user_permission_level": self.user_permission_level,
         }
         return await render_graph(templates, context)

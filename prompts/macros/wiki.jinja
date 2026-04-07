@@ -11,3 +11,13 @@
 {% endfor %}
 {% endif %}
 {% endmacro %}
+
+{% macro render_wiki_pages(wiki_pages) %}
+{% if wiki_pages %}
+## RELEVANT WIKI PAGES
+{% for page in wiki_pages %}
+### {{ page.title }} [{{ page.category }}]
+{{ page.content[:1000] }}
+{% endfor %}
+{% endif %}
+{% endmacro %}

@@ -21,6 +21,7 @@ class QueryEngine:
         self.prompt_os = PromptOS()
         self.agents: Dict[str, BaseAgent] = {}
         self.memory_retriever: Optional[Callable[..., Coroutine]] = None
+        self.wiki_retriever: Optional[Callable[..., Coroutine]] = None
 
     def register_agent(self, agent: BaseAgent) -> None:
         self.agents[agent.name] = agent
@@ -57,9 +58,13 @@ class QueryEngine:
         # L3: Policy decision
         decision = await self.policy.decide(request)
 
-        # L4: Memory retrieval — stub returns {} until memory is wired
+        # L4: Memory retrieval — use wiki-aware retrieval when available
         memory_data: dict[str, Any] = {}
-        if self.memory_retriever:
+        if self.wiki_retriever:
+            memory_data = await self.wiki_retriever(
+                request.input_text, decision.memory_strategy
+            )
+        elif self.memory_retriever:
             memory_data["memories"] = await self.memory_retriever(
                 request.input_text, decision.memory_strategy
             )

@@ -11,3 +11,6 @@ build/
 node_modules/
 .env
 *.tsbuildinfo
+
+# Godot full HTML docs (too large for repo)
+godot-docs-stable/
