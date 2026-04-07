@@ -107,6 +107,23 @@ Error-isolated, priority-based pub/sub. Lower number = runs first. Safety hooks 
 
 SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 
+### Web Tools (web_eyes integration)
+
+`src/execution/web_tools.py` provides 6 web tools wrapping [web_eyes](https://github.com/slothitude/web_eyes) controller functions. Available to all agents (BUDDY, SUPERVISOR, ORCHESTRATOR):
+
+| Tool | web_eyes Function | Purpose |
+|------|-------------------|---------|
+| `web_search` | `controller.search_and_crawl()` | Search SearXNG → crawl → summarize |
+| `web_crawl` | `controller.crawl_only()` | Crawl URLs, return raw text |
+| `web_summarize` | `controller.summarize_urls()` | Crawl + summarize URLs |
+| `web_ask` | `controller.ask_question()` | Full pipeline: search → crawl → answer with citations |
+| `web_see` | `controller.see_urls()` | Screenshot + vision extraction + summarize |
+| `web_look` | `summarizer.vision_extract()` | Analyze base64 image with vision AI |
+
+- **WebToolsAdapter** — lazy adapter in `src/execution/web_tools.py`. Imports web_eyes modules only on first use. If web_eyes or SearXNG aren't available, tools return clear error messages instead of crashing.
+- **ToolExecutor dispatch** — All 6 web tools are dispatched from `ToolExecutor.execute()`. SUPERVISOR/ORCHESTRATOR call web tools via `AgentToolExecutor` fallthrough to `ToolExecutor`.
+- **Setup**: `git submodule add https://github.com/slothitude/web_eyes vendor/web_eyes`, `pip install -e ".[web]"`, `playwright install chromium`, SearXNG running, `NIM_API_KEY` in `.env`.
+
 ## Conventions
 - Python 3.11+, Pydantic v2 for models, Jinja2 for templates, aiofiles for async I/O
 - `openai>=1.0` for LLM provider, `httpx` for reliable async HTTP on Windows; fallback chain: `glm-5.1 → glm-5 → glm-5-turbo → glm-4.7 → glm-4.6 → glm-4.5-air`
@@ -121,4 +138,7 @@ SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 - To run specific tests: `python tests/test_ultimate.py` (standalone runner, no pytest required)
 - `test_dashboard.py` is excluded from pytest — its `aiohttp` server import hangs during collection
 - `BaseAgent` accepts optional `provider` param — pass `provider="nvidia"` to route to a different LLM; omit for default provider
-- `AgentToolExecutor` intercepts delegation tools (`delegate_batch`, `spawn_workers`) and runs agents in parallel via `asyncio.gather()`; falls through to `ToolExecutor` for bash/read/write
+- `AgentToolExecutor` intercepts delegation tools (`delegate_batch`, `spawn_workers`) and runs agents in parallel via `asyncio.gather()`; falls through to `ToolExecutor` for bash/read/write/web tools
+- Web tools (`web_search`, `web_crawl`, `web_summarize`, `web_ask`, `web_see`, `web_look`) are defined in `src/execution/web_tools.py` as `WEB_TOOLS` list; added to all agent tool loops via `DEFAULT_TOOLS + WEB_TOOLS`
+- `WebToolsAdapter.is_available()` checks if web_eyes can be imported; `ToolExecutor.close_web()` shuts down the crawler at exit
+- Install web extras: `pip install -e ".[web]"` — core JINN works without them

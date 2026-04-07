@@ -12,6 +12,7 @@ from src.agents.orchestrator import OrchestratorAgent
 from src.agents.supervisor import SupervisorAgent
 from src.execution.toolbox import ToolExecutor
 from src.execution.agent_tools import AgentToolExecutor
+from src.execution.web_tools import WebToolsAdapter
 from src.memory.store import MemoryStore
 from src.memory.wiki import WikiStore
 from src.memory.retrieval import retrieve as memory_retrieve
@@ -75,6 +76,8 @@ async def main() -> None:
     state = AgentState(session_id="cli-session-001")
 
     print("=== JINN — Programmable Cognition System ===")
+    if WebToolsAdapter.is_available():
+        print("[web] web_eyes integration available")
     print("Type your input (or 'quit' to exit):\n")
 
     while True:
@@ -122,6 +125,7 @@ async def main() -> None:
         print(f"\n{response}\n")
 
     # Cleanup
+    await tool_executor.close_web()
     store.close()
     wiki_store.close()
     trace_logger.close()

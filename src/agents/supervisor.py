@@ -11,6 +11,7 @@ from src.core.models import AgentState, Event, ToolCall
 from src.core.registry import listens
 from src.execution.agent_tools import SPAWN_WORKERS_TOOL
 from src.execution.toolbox import BASH_TOOL, READ_TOOL
+from src.execution.web_tools import WEB_TOOLS
 
 if TYPE_CHECKING:
     from src.execution.agent_tools import AgentToolExecutor
@@ -72,6 +73,7 @@ class SupervisorAgent(BaseAgent):
             SPAWN_WORKERS_TOOL.to_openai_format(),
             BASH_TOOL.to_openai_format(),
             READ_TOOL.to_openai_format(),
+            *(t.to_openai_format() for t in WEB_TOOLS),
         ]
         messages: list[dict] = [{"role": "user", "content": initial_prompt}]
 

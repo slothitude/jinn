@@ -10,6 +10,7 @@ from src.core.bus import EventBus
 from src.core.models import AgentState, Event, ToolCall
 from src.core.registry import listens
 from src.execution.agent_tools import DELEGATE_BATCH_TOOL
+from src.execution.web_tools import WEB_TOOLS
 
 if TYPE_CHECKING:
     from src.execution.agent_tools import AgentToolExecutor
@@ -68,7 +69,10 @@ class OrchestratorAgent(BaseAgent):
                 yield token
             return
 
-        tools = [DELEGATE_BATCH_TOOL.to_openai_format()]
+        tools = [
+            DELEGATE_BATCH_TOOL.to_openai_format(),
+            *(t.to_openai_format() for t in WEB_TOOLS),
+        ]
         messages: list[dict] = [{"role": "user", "content": initial_prompt}]
 
         for _ in range(max_iterations):

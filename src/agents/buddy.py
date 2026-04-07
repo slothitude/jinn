@@ -128,8 +128,9 @@ class BuddyAgent(BaseAgent):
             return
 
         from src.execution.toolbox import DEFAULT_TOOLS
+        from src.execution.web_tools import WEB_TOOLS
 
-        tools = [t.to_openai_format() for t in DEFAULT_TOOLS]
+        tools = [t.to_openai_format() for t in DEFAULT_TOOLS + WEB_TOOLS]
         messages: list[dict] = [{"role": "user", "content": initial_prompt}]
 
         for _ in range(max_iterations):

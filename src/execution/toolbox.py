@@ -98,6 +98,7 @@ class ToolExecutor:
         self.bus = bus
         self.sandbox_dir = sandbox_dir or os.path.join(os.getcwd(), "sandbox")
         self.default_timeout = default_timeout
+        self._web_adapter: WebToolsAdapter | None = None
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call with KAIROS safety gate."""
@@ -130,6 +131,12 @@ class ToolExecutor:
             "bash": self._execute_bash,
             "read": self._execute_read,
             "write": self._execute_write,
+            "web_search": self._execute_web_search,
+            "web_crawl": self._execute_web_crawl,
+            "web_summarize": self._execute_web_summarize,
+            "web_ask": self._execute_web_ask,
+            "web_see": self._execute_web_see,
+            "web_look": self._execute_web_look,
         }
         handler = dispatchers.get(tool_call.name)
         if handler is None:
@@ -205,3 +212,62 @@ class ToolExecutor:
             return f"Wrote {len(content)} chars to {path}", True
         except Exception as e:
             return str(e), False
+
+    # -- Web tool handlers (lazily initialized) --
+
+    def _get_web_adapter(self):
+        if self._web_adapter is None:
+            from src.execution.web_tools import WebToolsAdapter
+            self._web_adapter = WebToolsAdapter()
+        return self._web_adapter
+
+    async def close_web(self) -> None:
+        """Shut down the web crawler if it was created."""
+        if self._web_adapter is not None:
+            await self._web_adapter.close()
+            self._web_adapter = None
+
+    def _is_web_error(self, result: str) -> bool:
+        """Check if a web tool result is an error/unavailability message."""
+        lower = result.lower()
+        return lower.startswith("web tools unavailable") or lower.startswith("web ") and "error:" in lower
+
+    async def _execute_web_search(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        result = await self._get_web_adapter().search(
+            query=args.get("query", ""),
+            limit=args.get("limit", 5),
+        )
+        return result, not self._is_web_error(result)
+
+    async def _execute_web_crawl(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        result = await self._get_web_adapter().crawl(urls=args.get("urls", []))
+        return result, not self._is_web_error(result)
+
+    async def _execute_web_summarize(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        result = await self._get_web_adapter().summarize(
+            urls=args.get("urls", []),
+            instruction=args.get("instruction"),
+        )
+        return result, not self._is_web_error(result)
+
+    async def _execute_web_ask(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        result = await self._get_web_adapter().ask(
+            question=args.get("question", ""),
+            scrape_top=args.get("scrape_top", 3),
+        )
+        return result, not self._is_web_error(result)
+
+    async def _execute_web_see(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        result = await self._get_web_adapter().see(
+            urls=args.get("urls", []),
+            instruction=args.get("instruction"),
+            extract_prompt=args.get("extract_prompt"),
+        )
+        return result, not self._is_web_error(result)
+
+    async def _execute_web_look(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        result = await self._get_web_adapter().look(
+            image_base64=args.get("image_base64", ""),
+            instruction=args.get("instruction"),
+        )
+        return result, not self._is_web_error(result)
