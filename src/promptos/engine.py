@@ -71,7 +71,8 @@ class PromptOS:
     ) -> None:
         if tools is None:
             from src.execution.toolbox import DEFAULT_TOOLS
-            self.tools: List[ToolSchema] = DEFAULT_TOOLS
+            from src.execution.web_tools import WEB_TOOLS
+            self.tools: List[ToolSchema] = DEFAULT_TOOLS + WEB_TOOLS
         else:
             self.tools = tools
         self.user_permission_level = user_permission_level
