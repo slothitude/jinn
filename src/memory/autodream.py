@@ -1,5 +1,5 @@
 import time
-from typing import List, Optional
+from typing import Callable, Optional
 
 from src.core.bus import EventBus
 from src.core.models import Event
@@ -54,6 +54,15 @@ class AutoDream:
         self.bus = bus
         self.store = store
         self._pending_failures: list[dict] = []
+        self._llm_extractor: Optional[Callable] = None
+
+    def set_llm_extractor(self, extractor: Callable) -> None:
+        """Plug in an LLM-backed extraction function.
+
+        The extractor receives ``history: list[dict]`` and must return
+        ``list[MemoryUnit]``.  If it raises, the rule-based fallback is used.
+        """
+        self._llm_extractor = extractor
 
     @listens(Event.TOOL_CALL_RESULT, priority=90)
     async def _on_tool_call_result(self, payload: dict) -> None:
@@ -144,11 +153,18 @@ class AutoDream:
         if pruned > 0:
             await self.bus.emit(Event.MEMORY_UPDATE, {"pruned": pruned, "remaining": self.store.count()})
 
-    def extract_from_session(self, history: List[dict]) -> List[MemoryUnit]:
+    def extract_from_session(self, history: list[dict]) -> list[MemoryUnit]:
         """Extract candidate memory units from conversation history.
 
-        In production, this uses LLM analysis. For now, creates summary units.
+        Delegates to the LLM extractor if one is plugged in; on failure
+        (or if none is set), falls back to rule-based extraction.
         """
+        if self._llm_extractor is not None:
+            try:
+                return self._llm_extractor(history)
+            except Exception:
+                pass  # fall through to rule-based
+
         units: list[MemoryUnit] = []
         for entry in history[-5:]:  # Last 5 exchanges
             user_msg = entry.get("user", "")

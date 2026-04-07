@@ -2,25 +2,35 @@ from src.core.models import AgentRequest, PolicyDecision
 
 POLICY_RULES = [
     {"intent": "plan", "agent": "ULTRAPLAN", "model_route": "opus", "memory_strategy": "deep", "threshold": 0.8},
+    {"intent": "architect", "agent": "ULTRAPLAN", "model_route": "opus", "memory_strategy": "deep", "threshold": 0.8},
+    {"intent": "design", "agent": "ULTRAPLAN", "model_route": "opus", "memory_strategy": "deep", "threshold": 0.7},
     {"intent": "code", "agent": "BUDDY", "model_route": "sonnet", "memory_strategy": "standard"},
+    {"intent": "refactor", "agent": "BUDDY", "model_route": "sonnet", "memory_strategy": "standard"},
+    {"intent": "explain", "agent": "BUDDY", "model_route": "sonnet", "memory_strategy": "standard"},
     {"intent": "debug", "agent": "BUDDY", "model_route": "sonnet", "memory_strategy": "failures"},
+    {"intent": "fix", "agent": "BUDDY", "model_route": "sonnet", "memory_strategy": "failures"},
     {"intent": "monitor", "agent": "KAIROS", "model_route": "haiku", "memory_strategy": "anomalies"},
     {"intent": "watch", "agent": "KAIROS", "model_route": "haiku", "memory_strategy": "anomalies"},
 ]
+
+_HIGH_COMPLEXITY_TOKENS = frozenset([
+    "architecture", "distributed", "caching", "migration", "full-stack",
+    "security audit", "database design", "system design", "microservice",
+    "pipeline", "infrastructure", "scalab", "deploy", "orchestrat",
+    "refactor", "redesign", "overhaul",
+])
 
 
 class PolicyEngine:
     """L3 Decision Plane — routes requests to agents + selects model + memory strategy."""
 
     async def calculate_complexity(self, text: str) -> float:
-        """Simple heuristic: length + keywords like 'architecture', 'full-stack', 'migration'."""
-        keywords = ['complex', 'architecture', 'database design', 'security audit', 'migration', 'full-stack']
-        score = 0.1
-        if len(text) > 500:
-            score += 0.3
-        if any(k in text.lower() for k in keywords):
-            score += 0.4
-        return min(score, 1.0)
+        """Heuristic: keyword presence (primary) + length (soft proxy)."""
+        lower = text.lower()
+        keyword_hits = sum(1 for t in _HIGH_COMPLEXITY_TOKENS if t in lower)
+        keyword_score = min(keyword_hits * 0.2, 0.6)
+        length_score = 0.1 if len(text) > 200 else 0.0
+        return min(0.1 + keyword_score + length_score, 1.0)
 
     async def decide(self, request: AgentRequest) -> PolicyDecision:
         text = request.input_text.lower()

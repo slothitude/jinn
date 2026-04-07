@@ -47,12 +47,19 @@ async def render_graph(
     for name in template_names:
         tpl = _env.get_template(f"{name}.jinja")
         rendered = await tpl.render_async(**context)
-        parts.append(rendered)
+        parts.append(str(rendered))
     return "\n\n".join(parts)
 
 
 class PromptOS:
     """L5 Cognitive Assembly — stitches memory into reasoning context via Jinja2."""
+
+    TEMPLATE_MAP: Dict[str, list[str]] = {
+        "BUDDY": ["base/system", "agents/buddy"],
+        "KAIROS": ["base/system", "agents/kairos"],
+        "ULTRAPLAN": ["base/system", "agents/ultraplan"],
+        "LIBRARIAN": ["base/system", "agents/librarian"],
+    }
 
     def __init__(
         self,
@@ -68,30 +75,50 @@ class PromptOS:
         self.user_permission_level = user_permission_level
         self._wiki_store = wiki_store
 
+    def _build_context(
+        self,
+        agent_id: str,
+        *,
+        query: str = "",
+        memories: Optional[list] = None,
+        wiki_pages: Optional[list] = None,
+        wiki_index: Optional[Dict] = None,
+        raw_content: str = "",
+        category: str = "General",
+        title: str = "Untitled",
+        is_plan_execution: bool = False,
+    ) -> Dict[str, Any]:
+        """Shared context builder for all assemble methods."""
+        return {
+            "memories": memories or [],
+            "wiki_pages": wiki_pages or [],
+            "wiki_index": wiki_index or {},
+            "query": query,
+            "agent_id": agent_id,
+            "agent_role": agent_id.lower(),
+            "tools_list": self.tools,
+            "user_permission_level": self.user_permission_level,
+            "raw_content": raw_content,
+            "category": category,
+            "title": title,
+            "is_plan_execution": is_plan_execution,
+        }
+
     async def assemble(
         self,
         request: "AgentRequest",
         memory_data: Dict[str, Any],
         agent_id: str,
     ) -> str:
-        template_map = {
-            "BUDDY": ["base/system", "agents/buddy"],
-            "KAIROS": ["base/system", "agents/kairos"],
-            "ULTRAPLAN": ["base/system", "agents/ultraplan"],
-            "LIBRARIAN": ["base/system", "agents/librarian"],
-        }
-        templates = template_map.get(agent_id, ["base/system", "agents/buddy"])
-        context = {
-            "memories": memory_data.get("memories", []),
-            "wiki_pages": memory_data.get("wiki_pages", []),
-            "query": request.input_text,
-            "agent_id": agent_id,
-            "agent_role": agent_id.lower(),
-            "tools_list": self.tools,
-            "user_permission_level": self.user_permission_level,
-            "wiki_index": self._wiki_store.get_index() if self._wiki_store else memory_data.get("wiki_index", {}),
-            "is_plan_execution": request.metadata.get("is_plan_execution", False) if request.metadata else False,
-        }
+        templates = self.TEMPLATE_MAP.get(agent_id, ["base/system", "agents/buddy"])
+        context = self._build_context(
+            agent_id,
+            query=request.input_text,
+            memories=memory_data.get("memories", []),
+            wiki_pages=memory_data.get("wiki_pages", []),
+            wiki_index=self._wiki_store.get_index() if self._wiki_store else memory_data.get("wiki_index", {}),
+            is_plan_execution=request.metadata.get("is_plan_execution", False) if request.metadata else False,
+        )
         return await render_graph(templates, context)
 
     async def assemble_librarian(
@@ -101,16 +128,14 @@ class PromptOS:
         title: str = "Untitled",
     ) -> str:
         """Assemble the Librarian distillation prompt with raw doc content."""
-        templates = ["base/system", "agents/librarian"]
-        context = {
-            "raw_content": raw_content,
-            "category": category,
-            "title": title,
-            "agent_id": "LIBRARIAN",
-            "agent_role": "librarian",
-            "memories": [],
-            "wiki_index": {},
-            "tools_list": [],
-            "user_permission_level": self.user_permission_level,
-        }
+        templates = self.TEMPLATE_MAP["LIBRARIAN"]
+        context = self._build_context(
+            "LIBRARIAN",
+            raw_content=raw_content,
+            category=category,
+            title=title,
+            tools_list=[],
+        )
+        # Librarian doesn't need tools — override with empty list
+        context["tools_list"] = []
         return await render_graph(templates, context)

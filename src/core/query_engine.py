@@ -79,12 +79,8 @@ class QueryEngine:
 
         # Ensure KAIROS knows about the current state if it's not the main agent
         kairos = self.agents.get("KAIROS")
-        if kairos and agent != kairos:
-            # We don't need the output, just to trigger it setting its state
-            # and potentially doing its own background monitoring if it had some.
-            # For now, we just ensure it has the state.
-            if hasattr(kairos, 'current_state'):
-                kairos.current_state = state
+        if kairos and agent is not kairos:
+            kairos.current_state = state
 
         full_response = ""
         async for chunk in agent.execute(prompt, state):

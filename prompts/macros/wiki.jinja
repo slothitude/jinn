@@ -6,7 +6,7 @@
 {% for category, pages in wiki_index.items() %}
 ### {{ category }}
 {% for page in pages %}
-- [[{{ page.title }}]]: {{ page.summary }}
+- **{{ page.title }}**: {{ (page.summary or '') | truncate(120, True, '...') }}
 {% endfor %}
 {% endfor %}
 {% endif %}
