@@ -76,6 +76,8 @@ class RichOrchestrationRenderer:
         self._live: Live | None = None
         self._running: bool = False
         self._last_input: str = ""
+        self._thinking_since: float = 0.0
+        self._rain_drops: list[tuple[int, int]] = []
 
     # -- Lifecycle --
 
@@ -286,6 +288,8 @@ class RichOrchestrationRenderer:
         self._session_map.clear()
         self._output_buffer.clear()
         self._plan_nodes.clear()
+        self._thinking_since = 0.0
+        self._rain_drops.clear()
         self._refresh()
 
     async def on_agent_start(self, payload: dict) -> None:
@@ -310,6 +314,8 @@ class RichOrchestrationRenderer:
         )
         self._agents[key] = node
         self._active_stack.append(key)
+        if self._thinking_since == 0.0:
+            self._thinking_since = time.monotonic()
         self._refresh()
 
     async def on_agent_chunk(self, payload: dict) -> None:
@@ -370,6 +376,8 @@ class RichOrchestrationRenderer:
 
         # Clear output buffer — main.py prints the final response as plain text
         self._output_buffer.clear()
+        self._thinking_since = 0.0
+        self._rain_drops.clear()
         self._refresh()
 
     async def on_delegation_start(self, payload: dict) -> None:
@@ -508,6 +516,16 @@ class RichOrchestrationRenderer:
 
     # -- Rendering --
 
+    def _is_long_thinking(self) -> bool:
+        """Check if any agent has been thinking/streaming for >30 seconds."""
+        if self._thinking_since == 0.0:
+            return False
+        # Must have at least one active agent
+        has_active = any(
+            n.status in ("thinking", "streaming") for n in self._agents.values()
+        )
+        return has_active and (time.monotonic() - self._thinking_since) > 30.0
+
     def _build_composite(self) -> Group:
         """Build the full composite renderable.
 
@@ -516,6 +534,9 @@ class RichOrchestrationRenderer:
           2. Output panel (takes remaining terminal height)
           3. Plan progress (if any)
         """
+        if self._is_long_thinking():
+            return self._build_rain_idle()
+
         parts: list = []
 
         # Compact status bar: banner + agent status in one line
@@ -534,6 +555,119 @@ class RichOrchestrationRenderer:
             parts.append(self._build_plan_progress())
 
         return Group(*parts)
+
+    def _build_rain_idle(self) -> Group:
+        """Full-screen matrix rain with embedded content for long waits (>30s)."""
+        import shutil
+
+        term_w, term_h = shutil.get_terminal_size((80, 24))
+        cols = min(term_w, 80)
+        rows = min(term_h, 24)
+
+        # Lazily init persistent rain drops
+        if not self._rain_drops or len(self._rain_drops) != cols:
+            self._rain_drops = [
+                (random.randint(0, rows), random.randint(3, rows)) for _ in range(cols)
+            ]
+
+        # Advance drops
+        for c in range(cols):
+            head, length = self._rain_drops[c]
+            head += random.randint(1, 2)
+            if head - length > rows:
+                head = random.randint(0, 3)
+                length = random.randint(3, rows)
+            self._rain_drops[c] = (head, length)
+
+        # Collect content to embed
+        active_agents = [
+            n for n in self._agents.values() if n.status in ("thinking", "streaming")
+        ]
+        elapsed_str = ""
+        if self._thinking_since:
+            elapsed_str = f"{time.monotonic() - self._thinking_since:.1f}s"
+
+        # Build content lines
+        content_lines: list[tuple[str, str]] = []  # (text, style)
+
+        # User query
+        if self._last_input:
+            content_lines.append((f"> {self._last_input[:cols - 6]}", "bold bright_cyan"))
+            content_lines.append(("", ""))
+
+        # Agent status
+        for agent in active_agents[:4]:
+            icon = AGENT_ICONS.get(agent.agent_type, "\u2022")
+            color = AGENT_COLORS.get(agent.agent_type, "")
+            status_icon = STATUS_ICONS.get(agent.status, "\u25cc")
+            line = f"  {icon} {agent.name} {status_icon} {agent.status}"
+            if elapsed_str:
+                line += f" ({elapsed_str})"
+            if agent.provider:
+                line += f"  {agent.provider}"
+            content_lines.append((line, color))
+
+            # Last tool call
+            if agent.tool_calls:
+                content_lines.append(
+                    (f"    \u2192 {agent.tool_calls[-1]}", "dim yellow")
+                )
+
+        # Streaming output (last ~8 lines)
+        if self._output_buffer:
+            raw = "".join(self._output_buffer[-50:])[-2000:]
+            filtered = "".join(c for c in raw if c.isprintable() or c in "\n\t")
+            out_lines = filtered.split("\n")
+            show = out_lines[-8:]
+            content_lines.append(("", ""))
+            for ol in show:
+                content_lines.append((f"  {ol[:cols - 6]}", "bright_green"))
+
+        # Build the rain grid with content embedded
+        content_start_row = max(0, (rows - len(content_lines)) // 2)
+        # Mark content rows
+        content_set = set(range(content_start_row, content_start_row + len(content_lines)))
+        max_content_col = 0
+        for idx, (text, _) in enumerate(content_lines):
+            r = content_start_row + idx
+            if r in content_set:
+                max_content_col = max(max_content_col, len(text))
+
+        grid = Text()
+        for r in range(rows):
+            for c in range(cols):
+                # Check if this is a content row
+                content_idx = r - content_start_row
+                is_content_row = 0 <= content_idx < len(content_lines)
+
+                if is_content_row and c >= 2 and c < max_content_col + 4:
+                    # Content zone — render text at the right column
+                    text, style = content_lines[content_idx]
+                    char_pos = c - 2
+                    if char_pos < len(text):
+                        ch = text[char_pos]
+                        grid.append(ch, style=style or "bright_green")
+                    else:
+                        grid.append(" ")
+                else:
+                    # Rain zone
+                    head, length = self._rain_drops[c]
+                    tail_start = head - length
+                    if tail_start <= r <= head:
+                        dist_from_head = head - r
+                        ch = random.choice(MATRIX_CHARS)
+                        if dist_from_head == 0:
+                            grid.append(ch, style="bold bright_green")
+                        elif dist_from_head <= 2:
+                            grid.append(ch, style="green")
+                        else:
+                            grid.append(ch, style="dim green")
+                    else:
+                        grid.append(" ")
+            if r < rows - 1:
+                grid.append("\n")
+
+        return Group(Panel(grid, style="on black", padding=0))
 
     def _build_status_bar(self) -> Text:
         """Compact single-line status bar."""
