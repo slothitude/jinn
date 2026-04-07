@@ -2,6 +2,13 @@ import asyncio
 import sys
 from pathlib import Path
 
+# Ensure stdout can handle unicode (emojis etc.) when piped
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from src.core.bus import EventBus
 from src.core.models import AgentRequest, AgentState, Event
 from src.core.query_engine import QueryEngine
@@ -22,6 +29,12 @@ from src.memory.autodream import AutoDream
 from src.feedback.trace_logger import TraceLogger
 from src.feedback.observability import register_feedback_hooks
 from src.core.registry import wire
+
+
+def _read_lines_sync():
+    """Yield lines from stdin (pipe mode)."""
+    for line in sys.stdin:
+        yield line.rstrip("\n")
 
 
 async def main() -> None:
@@ -58,12 +71,14 @@ async def main() -> None:
 
     # L9: Rich CLI Renderer (graceful fallback if rich unavailable or non-TTY)
     renderer = None
-    try:
-        from src.cli.renderer import RichOrchestrationRenderer
-        renderer = RichOrchestrationRenderer(bus)
-        renderer.start()
-    except ImportError:
-        pass
+    pipe_mode = not sys.stdin.isatty()
+    if not pipe_mode:
+        try:
+            from src.cli.renderer import RichOrchestrationRenderer
+            renderer = RichOrchestrationRenderer(bus)
+            renderer.start()
+        except ImportError:
+            pass
 
     # L3-L7: QueryEngine orchestrator
     engine = QueryEngine(bus)
@@ -88,15 +103,30 @@ async def main() -> None:
         print("=== JINN — Programmable Cognition System ===")
         if WebToolsAdapter.is_available():
             print("[web] web_eyes integration available")
-        print("Type your input (or 'quit' to exit):\n")
+        if pipe_mode:
+            print("[pipe mode] reading from stdin\n")
+        else:
+            print("Type your input (or 'quit' to exit):\n")
+
+    # Build input source: pipe reads stdin lines, interactive uses input()
+    if pipe_mode:
+        input_source = _read_lines_sync()
+    else:
+        input_source = None  # use input() per iteration
 
     while True:
         try:
-            if renderer:
-                renderer.pause()
-            user_input = input("> ").strip()
-            if renderer:
-                renderer.resume()
+            if pipe_mode:
+                try:
+                    user_input = next(input_source).strip()
+                except StopIteration:
+                    break
+            else:
+                if renderer:
+                    renderer.pause()
+                user_input = input("> ").strip()
+                if renderer:
+                    renderer.resume()
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye.")
             break
@@ -147,7 +177,7 @@ async def main() -> None:
         # Always print the final response so it's visible as scrollback
         if renderer:
             renderer.pause()
-        print(f"\n{response}\n")
+        print(f"\n{response}\n", flush=True)
 
     # Cleanup
     if renderer:
