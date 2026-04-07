@@ -56,6 +56,15 @@ async def main() -> None:
     trace_logger = TraceLogger()
     register_feedback_hooks(bus, trace_logger)
 
+    # L9: Rich CLI Renderer (graceful fallback if rich unavailable or non-TTY)
+    renderer = None
+    try:
+        from src.cli.renderer import RichOrchestrationRenderer
+        renderer = RichOrchestrationRenderer(bus)
+        renderer.start()
+    except ImportError:
+        pass
+
     # L3-L7: QueryEngine orchestrator
     engine = QueryEngine(bus)
     engine.register_agent(buddy)
@@ -75,14 +84,19 @@ async def main() -> None:
     # Session state
     state = AgentState(session_id="cli-session-001")
 
-    print("=== JINN — Programmable Cognition System ===")
-    if WebToolsAdapter.is_available():
-        print("[web] web_eyes integration available")
-    print("Type your input (or 'quit' to exit):\n")
+    if renderer is None:
+        print("=== JINN — Programmable Cognition System ===")
+        if WebToolsAdapter.is_available():
+            print("[web] web_eyes integration available")
+        print("Type your input (or 'quit' to exit):\n")
 
     while True:
         try:
+            if renderer:
+                renderer.pause()
             user_input = input("> ").strip()
+            if renderer:
+                renderer.resume()
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye.")
             break
@@ -93,6 +107,9 @@ async def main() -> None:
 
         if not user_input:
             continue
+
+        if renderer:
+            renderer.resume()
 
         if user_input.startswith("/compile"):
             parts = user_input.split()
@@ -122,9 +139,12 @@ async def main() -> None:
 
         request = AgentRequest(session_id=state.session_id, input_text=user_input)
         response = await engine.process(request, state)
-        print(f"\n{response}\n")
+        if renderer is None:
+            print(f"\n{response}\n")
 
     # Cleanup
+    if renderer:
+        renderer.stop()
     await tool_executor.close_web()
     store.close()
     wiki_store.close()

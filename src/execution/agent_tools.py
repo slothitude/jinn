@@ -158,13 +158,14 @@ class AgentToolExecutor:
                 task_description=task_desc,
                 constraints=constraints,
             )
+            scoped_state = AgentState(session_id=f"del-{uuid4().hex[:8]}", history=[])
+
             await self.bus.emit(Event.DELEGATION_START, {
                 "task": task_desc,
                 "tier": target_agent_name,
                 "index": idx,
+                "session_id": scoped_state.session_id,
             })
-
-            scoped_state = AgentState(session_id=f"del-{uuid4().hex[:8]}", history=[])
             prompt = task_desc
             if constraints:
                 prompt += f"\n\nConstraints: {constraints}"
@@ -183,6 +184,7 @@ class AgentToolExecutor:
                 "tier": target_agent_name,
                 "index": idx,
                 "success": success,
+                "session_id": scoped_state.session_id,
             })
             return idx, result_text, success
 
