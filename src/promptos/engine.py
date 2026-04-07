@@ -59,6 +59,8 @@ class PromptOS:
         "KAIROS": ["base/system", "agents/kairos"],
         "ULTRAPLAN": ["base/system", "agents/ultraplan"],
         "LIBRARIAN": ["base/system", "agents/librarian"],
+        "ORCHESTRATOR": ["base/system", "agents/orchestrator"],
+        "SUPERVISOR": ["base/system", "agents/supervisor"],
     }
 
     def __init__(

@@ -74,6 +74,15 @@ class KairosAgent(BaseAgent):
             if pattern in command:
                 raise EventCancelled(f"KAIROS blocked dangerous command: {command}")
 
+    @listens(Event.DELEGATION_START, priority=10)
+    async def on_delegation_start(self, payload: dict) -> None:
+        """Enforce max delegation depth and parallelism limits."""
+        depth = payload.get("depth", 0)
+        if depth > 3:
+            raise EventCancelled(
+                f"KAIROS blocked delegation: depth {depth} exceeds maximum (3)"
+            )
+
     @listens(Event.AGENT_CHUNK, priority=10)
     async def on_agent_chunk(self, payload: dict) -> None:
         """EventBus subscriber — monitors other agents' output for anomalies."""

@@ -289,6 +289,33 @@ async def list_models(client: AsyncOpenAI | None = None) -> list[str]:
         return sorted(m["id"] for m in data.get("data", []))
 
 
+# --- Multi-provider client registry ---
+
+_provider_clients: dict[str, AsyncOpenAI] = {}
+_provider_models: dict[str, str] = {}
+
+
+def get_provider_client(provider_name: str) -> AsyncOpenAI:
+    """Get or create a cached client for a specific provider."""
+    if provider_name not in _provider_clients:
+        profile = PROVIDERS[provider_name]
+        api_key = os.getenv("LLM_API_KEY", "") or os.getenv(f"{provider_name.upper()}_API_KEY", "")
+        base_url = os.getenv("LLM_BASE_URL", "") or profile["base_url"]
+        _provider_clients[provider_name] = AsyncOpenAI(
+            base_url=base_url,
+            api_key=api_key,
+        )
+        _provider_models[provider_name] = os.getenv("LLM_MODEL", "") or profile["default_model"]
+    return _provider_clients[provider_name]
+
+
+def get_provider_model(provider_name: str) -> str:
+    """Get the default model for a provider (creates client if needed)."""
+    if provider_name not in _provider_models:
+        get_provider_client(provider_name)  # populates _provider_models
+    return _provider_models[provider_name]
+
+
 # Module-level singleton for convenience
 _config = _load_config()
 default_client = create_client(_config)

@@ -8,7 +8,10 @@ from src.core.query_engine import QueryEngine
 from src.agents.buddy import BuddyAgent
 from src.agents.kairos import KairosAgent
 from src.agents.ultraplan import UltraplanAgent
+from src.agents.orchestrator import OrchestratorAgent
+from src.agents.supervisor import SupervisorAgent
 from src.execution.toolbox import ToolExecutor
+from src.execution.agent_tools import AgentToolExecutor
 from src.memory.store import MemoryStore
 from src.memory.wiki import WikiStore
 from src.memory.retrieval import retrieve as memory_retrieve
@@ -33,13 +36,20 @@ async def main() -> None:
     buddy = BuddyAgent(bus)
     kairos = KairosAgent(bus)
     ultraplan = UltraplanAgent(bus)
+    orchestrator = OrchestratorAgent(bus, provider="zhipu")
+    supervisor = SupervisorAgent(bus, provider="zhipu")
 
     # Wire declarative subscriptions via @listens decorators
-    wire(bus, autodream, kairos, buddy)
+    wire(bus, autodream, kairos, buddy, orchestrator, supervisor)
 
     # L7: Tool Execution
     tool_executor = ToolExecutor(bus)
     buddy.set_tool_executor(tool_executor)
+
+    # L7.5: Agent-to-agent delegation bridge (multi-provider)
+    agent_tool_executor = AgentToolExecutor(bus, {}, tool_executor)
+    orchestrator.set_agent_tool_executor(agent_tool_executor)
+    supervisor.set_agent_tool_executor(agent_tool_executor)
 
     # L8: Feedback
     trace_logger = TraceLogger()
@@ -50,6 +60,11 @@ async def main() -> None:
     engine.register_agent(buddy)
     engine.register_agent(kairos)
     engine.register_agent(ultraplan)
+    engine.register_agent(orchestrator)
+    engine.register_agent(supervisor)
+
+    # Wire agent tool executor with full agent registry (after registration)
+    agent_tool_executor.agents = engine.agents
     engine.memory_retriever = lambda q, strategy: memory_retrieve(q, strategy, store)
     engine.wiki_retriever = lambda q, strategy: retrieve_with_wiki(q, strategy, store, wiki_store)
 

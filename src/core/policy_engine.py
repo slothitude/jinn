@@ -11,6 +11,10 @@ POLICY_RULES = [
     {"intent": "fix", "agent": "BUDDY", "model_route": "sonnet", "memory_strategy": "failures"},
     {"intent": "monitor", "agent": "KAIROS", "model_route": "haiku", "memory_strategy": "anomalies"},
     {"intent": "watch", "agent": "KAIROS", "model_route": "haiku", "memory_strategy": "anomalies"},
+    {"intent": "multi-agent", "agent": "ORCHESTRATOR", "model_route": "opus", "memory_strategy": "deep", "threshold": 0.7},
+    {"intent": "hierarchy", "agent": "ORCHESTRATOR", "model_route": "opus", "memory_strategy": "deep", "threshold": 0.7},
+    {"intent": "delegate", "agent": "ORCHESTRATOR", "model_route": "opus", "memory_strategy": "deep"},
+    {"intent": "parallel", "agent": "ORCHESTRATOR", "model_route": "opus", "memory_strategy": "deep"},
 ]
 
 _HIGH_COMPLEXITY_TOKENS = frozenset([
@@ -18,6 +22,7 @@ _HIGH_COMPLEXITY_TOKENS = frozenset([
     "security audit", "database design", "system design", "microservice",
     "pipeline", "infrastructure", "scalab", "deploy", "orchestrat",
     "refactor", "redesign", "overhaul",
+    "multi-agent", "hierarchy", "delegate", "parallel",
 ])
 
 

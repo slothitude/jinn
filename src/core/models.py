@@ -16,6 +16,8 @@ class Event(str, Enum):
     MEMORY_UPDATE = "memory_update"
     TOOL_CALL_REQUEST = "tool_call_request"
     TOOL_CALL_RESULT = "tool_call_result"
+    DELEGATION_START = "delegation_start"
+    DELEGATION_END = "delegation_end"
 
 
 @dataclass
@@ -87,3 +89,22 @@ class ToolResult(BaseModel):
     name: str
     output: str
     success: bool = True
+
+
+class AgentTier(str, Enum):
+    ORCHESTRATOR = "orchestrator"
+    SUPERVISOR = "supervisor"
+    WORKER = "worker"
+
+
+class DelegationContext(BaseModel):
+    task_description: str
+    constraints: str = ""
+    tier: AgentTier = AgentTier.SUPERVISOR
+    provider: str = "zhipu"
+
+
+class DelegationResult(BaseModel):
+    success: bool
+    output: str = ""
+    errors: list[str] = Field(default_factory=list)
