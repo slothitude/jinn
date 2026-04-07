@@ -134,7 +134,6 @@ class PromptOS:
             raw_content=raw_content,
             category=category,
             title=title,
-            tools_list=[],
         )
         # Librarian doesn't need tools — override with empty list
         context["tools_list"] = []
