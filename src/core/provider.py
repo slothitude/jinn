@@ -20,11 +20,40 @@ class LLMConfig:
     model: str
 
 
+PROVIDERS = {
+    "zhipu": {
+        "base_url": "",
+        "default_model": "glm-5.1",
+        "fallback_models": [
+            "glm-5.1", "glm-5", "glm-5-turbo",
+            "glm-4.7", "glm-4.6", "glm-4.5", "glm-4.5-air",
+        ],
+    },
+    "nvidia": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "default_model": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "fallback_models": [
+            "nvidia/llama-3.1-nemotron-70b-instruct",
+            "meta/llama-3.1-405b-instruct",
+            "nvidia/llama-3.3-nemotron-super-49b-v1",
+        ],
+    },
+}
+
+
 def _load_config() -> LLMConfig:
+    provider_name = os.getenv("LLM_PROVIDER", "zhipu").lower()
+    profile = PROVIDERS.get(provider_name)
+    if profile is None:
+        raise ValueError(
+            f"Unknown LLM_PROVIDER '{provider_name}'. "
+            f"Available: {', '.join(PROVIDERS.keys())}"
+        )
+    prefixed_key = os.getenv(f"{provider_name.upper()}_API_KEY", "")
     return LLMConfig(
-        base_url=os.getenv("LLM_BASE_URL", ""),
-        api_key=os.getenv("LLM_API_KEY", ""),
-        model=os.getenv("LLM_MODEL", "glm-5.1"),
+        base_url=os.getenv("LLM_BASE_URL", "") or profile["base_url"],
+        api_key=os.getenv("LLM_API_KEY", "") or prefixed_key,
+        model=os.getenv("LLM_MODEL", "") or profile["default_model"],
     )
 
 
@@ -115,22 +144,16 @@ async def _httpx_stream(
 
 # --- Model fallback chain ---
 
-# Preferred model order: newest/capable first, lightweight fallback last
-FALLBACK_MODELS = [
-    "glm-5.1",
-    "glm-5",
-    "glm-5-turbo",
-    "glm-4.7",
-    "glm-4.6",
-    "glm-4.5",
-    "glm-4.5-air",
-]
+# Backward-compatible alias
+FALLBACK_MODELS = PROVIDERS["zhipu"]["fallback_models"]
 
 
 def _get_fallback_chain(preferred: str) -> list[str]:
     """Build fallback chain starting with preferred model."""
+    provider_name = os.getenv("LLM_PROVIDER", "zhipu").lower()
+    profile = PROVIDERS.get(provider_name, PROVIDERS["zhipu"])
     chain = [preferred]
-    for m in FALLBACK_MODELS:
+    for m in profile["fallback_models"]:
         if m not in chain:
             chain.append(m)
     return chain
