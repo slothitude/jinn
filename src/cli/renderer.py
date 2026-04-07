@@ -9,6 +9,7 @@ from __future__ import annotations
 import random
 import re
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -78,6 +79,7 @@ class RichOrchestrationRenderer:
         self._last_input: str = ""
         self._thinking_since: float = 0.0
         self._rain_drops: list[tuple[int, int]] = []
+        self._rain_timer_active: bool = False
 
     # -- Lifecycle --
 
@@ -290,6 +292,7 @@ class RichOrchestrationRenderer:
         self._plan_nodes.clear()
         self._thinking_since = 0.0
         self._rain_drops.clear()
+        self._rain_timer_active = False
         self._refresh()
 
     async def on_agent_start(self, payload: dict) -> None:
@@ -376,8 +379,11 @@ class RichOrchestrationRenderer:
 
         # Clear output buffer — main.py prints the final response as plain text
         self._output_buffer.clear()
-        self._thinking_since = 0.0
-        self._rain_drops.clear()
+        # Only reset rain timer if no agents are still active
+        if not any(n.status in ("thinking", "streaming") for n in self._agents.values()):
+            self._thinking_since = 0.0
+            self._rain_drops.clear()
+            self._rain_timer_active = False
         self._refresh()
 
     async def on_delegation_start(self, payload: dict) -> None:
@@ -526,6 +532,18 @@ class RichOrchestrationRenderer:
         )
         return has_active and (time.monotonic() - self._thinking_since) > 30.0
 
+    def _schedule_rain_frame(self) -> None:
+        """Self-scheduling timer to keep rain animating between events."""
+        if not self._is_long_thinking() or self._live is None:
+            self._rain_timer_active = False
+            return
+        self._rain_timer_active = True
+        self._advance_rain_drops()
+        self._live.update(self._build_rain_idle())
+        t = threading.Timer(REFRESH_INTERVAL, self._schedule_rain_frame)
+        t.daemon = True
+        t.start()
+
     def _build_composite(self) -> Group:
         """Build the full composite renderable.
 
@@ -535,6 +553,8 @@ class RichOrchestrationRenderer:
           3. Plan progress (if any)
         """
         if self._is_long_thinking():
+            if not self._rain_timer_active:
+                self._schedule_rain_frame()
             return self._build_rain_idle()
 
         parts: list = []
@@ -556,8 +576,58 @@ class RichOrchestrationRenderer:
 
         return Group(*parts)
 
+    def _advance_rain_drops(self) -> None:
+        """Move rain drops down by 1-2 rows."""
+        if not self._rain_drops:
+            return
+        import shutil
+        _, term_h = shutil.get_terminal_size((80, 24))
+        rows = min(term_h, 24)
+        for c in range(len(self._rain_drops)):
+            head, length = self._rain_drops[c]
+            head += random.randint(1, 2)
+            if head - length > rows:
+                head = random.randint(0, 3)
+                length = random.randint(3, rows)
+            self._rain_drops[c] = (head, length)
+
+    def _build_rain_line(self, row: int, cols: int) -> Text:
+        """Build one row of rain with batched same-style segments."""
+        segments: list[tuple[str, str]] = []
+        for c in range(cols):
+            head, length = self._rain_drops[c]
+            tail_start = head - length
+            if tail_start <= row <= head:
+                dist = head - row
+                ch = random.choice(MATRIX_CHARS)
+                if dist == 0:
+                    style = "bold bright_green"
+                elif dist <= 2:
+                    style = "green"
+                else:
+                    style = "dim green"
+                segments.append((ch, style))
+            else:
+                segments.append((" ", ""))
+
+        # Batch consecutive same-style chars into single append calls
+        result = Text()
+        buf = ""
+        buf_style = ""
+        for ch, st in segments:
+            if st == buf_style:
+                buf += ch
+            else:
+                if buf:
+                    result.append(buf, style=buf_style)
+                buf = ch
+                buf_style = st
+        if buf:
+            result.append(buf, style=buf_style)
+        return result
+
     def _build_rain_idle(self) -> Group:
-        """Full-screen matrix rain with embedded content for long waits (>30s)."""
+        """Full-screen matrix rain with centered content block for long waits (>30s)."""
         import shutil
 
         term_w, term_h = shutil.get_terminal_size((80, 24))
@@ -570,15 +640,6 @@ class RichOrchestrationRenderer:
                 (random.randint(0, rows), random.randint(3, rows)) for _ in range(cols)
             ]
 
-        # Advance drops
-        for c in range(cols):
-            head, length = self._rain_drops[c]
-            head += random.randint(1, 2)
-            if head - length > rows:
-                head = random.randint(0, 3)
-                length = random.randint(3, rows)
-            self._rain_drops[c] = (head, length)
-
         # Collect content to embed
         active_agents = [
             n for n in self._agents.values() if n.status in ("thinking", "streaming")
@@ -587,15 +648,13 @@ class RichOrchestrationRenderer:
         if self._thinking_since:
             elapsed_str = f"{time.monotonic() - self._thinking_since:.1f}s"
 
-        # Build content lines
-        content_lines: list[tuple[str, str]] = []  # (text, style)
+        # Build content lines: (text, style)
+        content_lines: list[tuple[str, str]] = []
 
-        # User query
         if self._last_input:
             content_lines.append((f"> {self._last_input[:cols - 6]}", "bold bright_cyan"))
             content_lines.append(("", ""))
 
-        # Agent status
         for agent in active_agents[:4]:
             icon = AGENT_ICONS.get(agent.agent_type, "\u2022")
             color = AGENT_COLORS.get(agent.agent_type, "")
@@ -607,13 +666,11 @@ class RichOrchestrationRenderer:
                 line += f"  {agent.provider}"
             content_lines.append((line, color))
 
-            # Last tool call
             if agent.tool_calls:
                 content_lines.append(
                     (f"    \u2192 {agent.tool_calls[-1]}", "dim yellow")
                 )
 
-        # Streaming output (last ~8 lines)
         if self._output_buffer:
             raw = "".join(self._output_buffer[-50:])[-2000:]
             filtered = "".join(c for c in raw if c.isprintable() or c in "\n\t")
@@ -623,47 +680,27 @@ class RichOrchestrationRenderer:
             for ol in show:
                 content_lines.append((f"  {ol[:cols - 6]}", "bright_green"))
 
-        # Build the rain grid with content embedded
-        content_start_row = max(0, (rows - len(content_lines)) // 2)
-        # Mark content rows
-        content_set = set(range(content_start_row, content_start_row + len(content_lines)))
-        max_content_col = 0
-        for idx, (text, _) in enumerate(content_lines):
-            r = content_start_row + idx
-            if r in content_set:
-                max_content_col = max(max_content_col, len(text))
+        # Build grid: rain rows above / content block / rain rows below
+        content_start = max(0, (rows - len(content_lines)) // 2)
+        content_end = content_start + len(content_lines)
 
         grid = Text()
         for r in range(rows):
-            for c in range(cols):
-                # Check if this is a content row
-                content_idx = r - content_start_row
-                is_content_row = 0 <= content_idx < len(content_lines)
+            if content_start <= r < content_end:
+                # Content row — clean dark background, no rain mixing
+                text, style = content_lines[r - content_start]
+                # Left pad to center
+                pad = max(0, (cols - len(text)) // 2)
+                grid.append(" " * pad)
+                grid.append(text, style=style or "bright_green")
+                # Right pad to fill row
+                remaining = cols - pad - len(text)
+                if remaining > 0:
+                    grid.append(" " * remaining)
+            else:
+                # Rain row
+                grid.append_text(self._build_rain_line(r, cols))
 
-                if is_content_row and c >= 2 and c < max_content_col + 4:
-                    # Content zone — render text at the right column
-                    text, style = content_lines[content_idx]
-                    char_pos = c - 2
-                    if char_pos < len(text):
-                        ch = text[char_pos]
-                        grid.append(ch, style=style or "bright_green")
-                    else:
-                        grid.append(" ")
-                else:
-                    # Rain zone
-                    head, length = self._rain_drops[c]
-                    tail_start = head - length
-                    if tail_start <= r <= head:
-                        dist_from_head = head - r
-                        ch = random.choice(MATRIX_CHARS)
-                        if dist_from_head == 0:
-                            grid.append(ch, style="bold bright_green")
-                        elif dist_from_head <= 2:
-                            grid.append(ch, style="green")
-                        else:
-                            grid.append(ch, style="dim green")
-                    else:
-                        grid.append(" ")
             if r < rows - 1:
                 grid.append("\n")
 
