@@ -582,7 +582,7 @@ class RichOrchestrationRenderer:
             return
         import shutil
         _, term_h = shutil.get_terminal_size((80, 24))
-        rows = min(term_h, 24)
+        rows = min(term_h, 24) - 2  # match _build_rain_idle grid size
         for c in range(len(self._rain_drops)):
             head, length = self._rain_drops[c]
             head += random.randint(1, 2)
@@ -632,7 +632,8 @@ class RichOrchestrationRenderer:
 
         term_w, term_h = shutil.get_terminal_size((80, 24))
         cols = min(term_w, 80)
-        rows = min(term_h, 24)
+        # -2 for Panel top/bottom border so it fits without scrolling
+        rows = min(term_h, 24) - 2
 
         # Lazily init persistent rain drops
         if not self._rain_drops or len(self._rain_drops) != cols:

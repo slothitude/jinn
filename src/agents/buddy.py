@@ -116,7 +116,7 @@ class BuddyAgent(BaseAgent):
         await self.bus.emit(Event.AGENT_END, {"agent": self.name})
 
     async def _run_tool_loop(
-        self, initial_prompt: str, max_iterations: int = 30,
+        self, initial_prompt: str, max_iterations: int = 50,
         state: AgentState | None = None,
     ) -> AsyncGenerator[str, None]:
         """Agentic tool loop — streams LLM content, executes tool calls, loops.
