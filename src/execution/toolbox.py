@@ -19,6 +19,7 @@ class ToolSchema(BaseModel):
     description: str
     parameters: Dict[str, Any]
     cost_factor: float = 1.0
+    safety_level: int = 0  # 0=safe, 1=moderate, 2=dangerous
 
     def to_openai_format(self) -> Dict[str, Any]:
         """Return dict for OpenAI function-calling `tools` param."""
@@ -51,6 +52,7 @@ BASH_TOOL = ToolSchema(
         "required": ["command"],
     },
     cost_factor=1.5,
+    safety_level=2,
 )
 
 READ_TOOL = ToolSchema(
@@ -78,6 +80,7 @@ WRITE_TOOL = ToolSchema(
         "required": ["path", "content"],
     },
     cost_factor=1.0,
+    safety_level=1,
 )
 
 DEFAULT_TOOLS: List[ToolSchema] = [BASH_TOOL, READ_TOOL, WRITE_TOOL]

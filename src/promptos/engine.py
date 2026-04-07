@@ -54,12 +54,19 @@ async def render_graph(
 class PromptOS:
     """L5 Cognitive Assembly — stitches memory into reasoning context via Jinja2."""
 
-    def __init__(self, tools: Optional[List[ToolSchema]] = None) -> None:
+    def __init__(
+        self,
+        tools: Optional[List[ToolSchema]] = None,
+        user_permission_level: int = 2,
+        wiki_store: Optional[Any] = None,
+    ) -> None:
         if tools is None:
             from src.execution.toolbox import DEFAULT_TOOLS
             self.tools: List[ToolSchema] = DEFAULT_TOOLS
         else:
             self.tools = tools
+        self.user_permission_level = user_permission_level
+        self._wiki_store = wiki_store
 
     async def assemble(
         self,
@@ -79,6 +86,8 @@ class PromptOS:
             "agent_id": agent_id,
             "agent_role": agent_id.lower(),
             "tools_list": self.tools,
+            "user_permission_level": self.user_permission_level,
+            "wiki_index": self._wiki_store.get_index() if self._wiki_store else {},
             "is_plan_execution": request.metadata.get("is_plan_execution", False) if request.metadata else False,
         }
         return await render_graph(templates, context)

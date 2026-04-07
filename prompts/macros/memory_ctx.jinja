@@ -1,7 +1,7 @@
-{% import "memory_constraints.jinja" as constraints %}
-{% import "memory_preferences.jinja" as preferences %}
-{% import "memory_failures.jinja" as failures %}
-{% import "memory_heuristics.jinja" as heuristics %}
+{% import "macros/memory_constraints.jinja" as constraints %}
+{% import "macros/memory_preferences.jinja" as preferences %}
+{% import "macros/memory_failures.jinja" as failures %}
+{% import "macros/memory_heuristics.jinja" as heuristics %}
 
 {% macro render_memory_for_agent(agent_role, memories) %}
 {% if agent_role == "buddy" %}

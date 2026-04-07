@@ -1,6 +1,10 @@
-{% macro render_tool_schema(tools) %}
+{% macro render_tool_schema(tools, user_permission_level=2) %}
 ### Available Tools
 {% for tool in (tools or []) %}
+  {% if tool.safety_level <= user_permission_level %}
 {{ tool.render() }}
+  {% else %}
+{# Tool {{ tool.name }} hidden — requires permission level {{ tool.safety_level }} (current: {{ user_permission_level }}) #}
+  {% endif %}
 {% endfor %}
 {% endmacro %}

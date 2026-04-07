@@ -1,0 +1,54 @@
+{# L5: Language-specific coding standards — "Skills Library" #}
+
+{% macro enforce_style(language) %}
+{% if language == 'python' %}
+### Python Standards
+- Follow PEP8 conventions.
+- Use type hints for all function signatures.
+- Prefer `pathlib` over `os.path`.
+- Use f-strings over `.format()` or `%` formatting.
+- Keep functions under 50 lines; decompose if longer.
+{% elif language == 'typescript' %}
+### TypeScript Standards
+- Use strict mode (`"strict": true` in tsconfig).
+- Prefer `interface` over `type` for object shapes.
+- Use `unknown` over `any` for truly dynamic values.
+- Prefer `async/await` over raw promises.
+{% elif language == 'rust' %}
+### Rust Standards
+- Follow `rustfmt` defaults.
+- Use `Result<T, E>` for recoverable errors, `panic!` only for bugs.
+- Prefer `&str` for borrowed strings, `String` for owned.
+- Use `clippy` lints as mandatory.
+{% elif language == 'go' %}
+### Go Standards
+- Run `gofmt` before every commit.
+- Handle errors explicitly — no silent drops.
+- Use `context.Context` as first param in package functions.
+- Prefer composition over inheritance via embedding.
+{% else %}
+### General Standards
+- Write clear, self-documenting code.
+- Keep functions small and focused.
+- Add comments only for "why", not "what".
+{% endif %}
+{% endmacro %}
+
+{% macro enforce_testing(language) %}
+{% if language == 'python' %}
+### Testing (Python)
+- Use `pytest` with `asyncio_mode = "auto"`.
+- Name test files `test_*.py`, functions `test_*`.
+- One assertion per concept; use descriptive assert messages.
+{% elif language == 'typescript' %}
+### Testing (TypeScript)
+- Use `vitest` or `jest` with strict TypeScript config.
+- Co-locate test files: `component.test.ts` next to `component.ts`.
+- Use `describe/it` blocks for grouping.
+{% else %}
+### Testing
+- Write tests for critical paths first.
+- Aim for meaningful coverage, not 100%.
+- Test behavior, not implementation.
+{% endif %}
+{% endmacro %}

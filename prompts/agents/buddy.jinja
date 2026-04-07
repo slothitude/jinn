@@ -9,7 +9,7 @@ You write clean code, debug issues, and explain technical concepts clearly.
 {% endblock %}
 
 {% block tools %}
-{{ tools.render_tool_schema(tools_list) }}
+{{ tools.render_tool_schema(tools_list, user_permission_level) }}
 {% endblock %}
 
 {% block memory %}

@@ -1,0 +1,13 @@
+{# L5: Wiki/knowledge index rendering #}
+
+{% macro render_wiki_index(wiki_index) %}
+{% if wiki_index %}
+## COMPILED KNOWLEDGE (from Wiki)
+{% for category, pages in wiki_index.items() %}
+### {{ category }}
+{% for page in pages %}
+- [[{{ page.title }}]]: {{ page.summary }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% endmacro %}

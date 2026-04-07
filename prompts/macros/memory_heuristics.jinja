@@ -1,8 +1,8 @@
 {% macro render_heuristics(memories, max_blocks=15) %}
 ### Learned Heuristics
-{% for m in (memories or []) if m.prompt_fragment %}
-{% if loop.index <= max_blocks %}
-{{ m.prompt_fragment }}
+{% for m in (memories or []) %}
+{% if m.prompt_fragment %}
+- PRIORITY: {{ "%.1f" | format(m.importance) }} | {{ m.prompt_fragment }}
 {% endif %}
 {% endfor %}
 {% endmacro %}

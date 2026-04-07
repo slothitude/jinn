@@ -1,4 +1,7 @@
 {# L5: PromptOS Base System Template #}
+{% import "macros/memory_ctx.jinja" as memory_ctx %}
+{% import "macros/wiki.jinja" as wiki %}
+
 # COGNITIVE CONTEXT: {{ agent_id }}
 
 {% block persona %}
@@ -6,11 +9,15 @@
 You are a modular component of the Jinn Programmable Cognition System.
 {% endblock %}
 
+{% block knowledge %}
+{# Wiki/knowledge index (structured project knowledge) #}
+{{ wiki.render_wiki_index(wiki_index | default({})) }}
+{% endblock %}
+
 {% block memory %}
-{# Structured Memory Fabric (L4) injection point #}
+{# Structured Memory Fabric (L4) — role-aware rendering via memory_ctx macros #}
 {% if memories %}
-## RELEVANT CONTEXT
-{{ memories }}
+{{ memory_ctx.render_memory_for_agent(agent_role | default("buddy"), memories) }}
 {% endif %}
 {% endblock %}
 

@@ -124,7 +124,7 @@ async def test_ultraplan_template_includes_tools():
 
     result = await render_graph(
         ["base/system", "agents/ultraplan"],
-        {"memories": [], "tools_list": DEFAULT_TOOLS, "query": "test task"},
+        {"memories": [], "tools_list": DEFAULT_TOOLS, "query": "test task", "user_permission_level": 2},
     )
     # Should now include tool schemas
     assert "bash" in result.lower()
