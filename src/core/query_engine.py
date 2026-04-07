@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any, Callable, Coroutine, Dict, Optional
+from typing import Any, Callable, Coroutine, Dict, Optional, Set
 
 from src.core.bus import EventBus
 from src.core.models import AgentRequest, AgentState, Event, PlanGraph
@@ -34,10 +34,22 @@ class QueryEngine:
                 data = json.loads(match.group(1))
                 # Validate it's a PlanGraph (basic check)
                 if "nodes" in data:
-                    return PlanGraph(**data)
+                    plan = PlanGraph(**data)
+                    # Strip unknown tool names so nodes degrade to slow path
+                    known: Set[str] = {t.name for t in self._known_tools()}
+                    for node in plan.nodes:
+                        if node.tool and node.tool not in known:
+                            node.tool = None
+                            node.tool_args = None
+                    return plan
         except Exception:
             pass
         return None
+
+    @staticmethod
+    def _known_tools():
+        from src.execution.toolbox import DEFAULT_TOOLS
+        return DEFAULT_TOOLS
 
     async def process(self, request: AgentRequest, state: AgentState) -> str:
         await self.bus.emit(Event.TURN_START, {"session_id": request.session_id})
@@ -84,8 +96,14 @@ class QueryEngine:
                 # Delegate to BUDDY for multi-step execution
                 buddy = self.agents.get("BUDDY")
                 if buddy:
-                    # We pass the plan (full_response) as context to BUDDY
-                    async for chunk in buddy.execute(full_response, state):
+                    # Pass plan context so BUDDY renders in PLAN EXECUTION MODE
+                    handoff_request = AgentRequest(
+                        session_id=request.session_id,
+                        input_text=full_response,
+                        metadata={"is_plan_execution": True},
+                    )
+                    handoff_prompt = await self.prompt_os.assemble(handoff_request, memory_data, "BUDDY")
+                    async for chunk in buddy.execute(handoff_prompt, state):
                         full_response += chunk
 
         # Finalize

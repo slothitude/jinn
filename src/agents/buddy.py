@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import AsyncGenerator, TYPE_CHECKING
 
 from src.agents.base import BaseAgent
 from src.core.bus import EventBus
 from src.core.models import Event, AgentState, ToolCall
+from src.core.registry import listens
 
 if TYPE_CHECKING:
     from src.execution.toolbox import ToolExecutor
@@ -18,12 +20,12 @@ class BuddyAgent(BaseAgent):
         super().__init__("BUDDY", bus)
         self._interrupted = False
         self._tool_executor: ToolExecutor | None = None
-        self.bus.subscribe(Event.KAIROS_INTERRUPT, self._handle_interrupt)
 
     def set_tool_executor(self, executor: ToolExecutor) -> None:
         """Wire in a ToolExecutor for the agentic tool loop."""
         self._tool_executor = executor
 
+    @listens(Event.KAIROS_INTERRUPT, priority=50)
     async def _handle_interrupt(self, payload: dict) -> None:
         """Handle global interrupt signal."""
         target = payload.get("target")
@@ -48,6 +50,25 @@ class BuddyAgent(BaseAgent):
                 step_prompt = f"PLAN CONTEXT: {prompt}\nCURRENT STEP: {node.action}"
 
                 try:
+                    # Fast path: node has a pre-specified tool
+                    if node.tool and self._tool_executor:
+                        tc = ToolCall(
+                            id=f"plan-{node.id}",
+                            name=node.tool,
+                            arguments=json.dumps(node.tool_args or {}),
+                        )
+                        result = await self._tool_executor.execute(tc)
+                        if result.success:
+                            yield result.output
+                            await self.bus.emit(Event.AGENT_CHUNK, {"agent": self.name, "chunk": result.output})
+                            node.status = "completed"
+                            state.current_node_index += 1
+                            continue
+                        else:
+                            # Fast path failed — fall through to LLM for recovery
+                            yield f"\n[FAST PATH FAILED] {result.output}\n"
+                            step_prompt += f"\nPrevious tool call ({node.tool}) failed: {result.output}\n"
+
                     async for token in self._run_tool_loop(step_prompt):
                         if self._interrupted:
                             node.status = "failed"

@@ -79,5 +79,6 @@ class PromptOS:
             "agent_id": agent_id,
             "agent_role": agent_id.lower(),
             "tools_list": self.tools,
+            "is_plan_execution": request.metadata.get("is_plan_execution", False) if request.metadata else False,
         }
         return await render_graph(templates, context)

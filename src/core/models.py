@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Event(str, Enum):
@@ -41,6 +41,18 @@ class PlanNode(BaseModel):
     action: str
     cost: str = "low"
     status: str = "pending"  # pending, in_progress, completed, failed
+    tool: Optional[str] = None                # "bash", "read", "write"
+    tool_args: Optional[Dict[str, Any]] = None  # {"command": "pytest"}
+
+    @model_validator(mode="after")
+    def _validate_tool_spec(self) -> "PlanNode":
+        has_tool = self.tool is not None
+        has_args = self.tool_args is not None
+        if has_tool and not has_args:
+            raise ValueError(f"PlanNode(id={self.id}): tool '{self.tool}' specified without tool_args")
+        if has_args and not has_tool:
+            raise ValueError(f"PlanNode(id={self.id}): tool_args specified without tool")
+        return self
 
 
 class PlanGraph(BaseModel):

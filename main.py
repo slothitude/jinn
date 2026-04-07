@@ -13,6 +13,7 @@ from src.memory.retrieval import retrieve as memory_retrieve
 from src.memory.autodream import AutoDream
 from src.feedback.trace_logger import TraceLogger
 from src.feedback.observability import register_feedback_hooks
+from src.core.registry import wire
 
 
 async def main() -> None:
@@ -28,8 +29,8 @@ async def main() -> None:
     kairos = KairosAgent(bus)
     ultraplan = UltraplanAgent(bus)
 
-    # Wire KAIROS as monitor on other agents' output
-    bus.subscribe(Event.AGENT_CHUNK, kairos.on_agent_chunk, priority=10)
+    # Wire declarative subscriptions via @listens decorators
+    wire(bus, autodream, kairos, buddy)
 
     # L7: Tool Execution
     tool_executor = ToolExecutor(bus)

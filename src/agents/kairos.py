@@ -4,6 +4,7 @@ from typing import AsyncGenerator
 from src.agents.base import BaseAgent
 from src.core.bus import EventBus
 from src.core.models import AgentState, Event, EventCancelled
+from src.core.registry import listens
 
 
 class KairosAgent(BaseAgent):
@@ -27,7 +28,6 @@ class KairosAgent(BaseAgent):
         super().__init__("KAIROS", bus)
         self._anomaly_keywords = {"error", "timeout", "forbidden", "unsafe", "exception"}
         self.current_state: AgentState | None = None
-        self.bus.subscribe(Event.TOOL_CALL_REQUEST, self.on_tool_call_request, priority=0)
 
     async def execute(self, prompt: str, state: AgentState | None = None) -> AsyncGenerator[str, None]:
         self.current_state = state
@@ -56,6 +56,7 @@ class KairosAgent(BaseAgent):
                 
         return False
 
+    @listens(Event.TOOL_CALL_REQUEST, priority=0)
     async def on_tool_call_request(self, payload: dict) -> None:
         """Pre-execution safety gate — block dangerous commands."""
         name = payload.get("name", "")
@@ -73,6 +74,7 @@ class KairosAgent(BaseAgent):
             if pattern in command:
                 raise EventCancelled(f"KAIROS blocked dangerous command: {command}")
 
+    @listens(Event.AGENT_CHUNK, priority=10)
     async def on_agent_chunk(self, payload: dict) -> None:
         """EventBus subscriber — monitors other agents' output for anomalies."""
         if payload.get("agent") == self.name:

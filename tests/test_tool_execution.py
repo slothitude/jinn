@@ -7,6 +7,7 @@ import pytest
 
 from src.core.bus import EventBus
 from src.core.models import Event, EventCancelled, ToolCall, ToolResult
+from src.core.registry import wire
 from src.execution.toolbox import BASH_TOOL, READ_TOOL, WRITE_TOOL, ToolExecutor, ToolSchema
 
 
@@ -121,6 +122,7 @@ async def test_kairos_blocks_dangerous_command():
 
     bus = EventBus()
     kairos = KairosAgent(bus)
+    wire(bus, kairos)
     executor = ToolExecutor(bus)
 
     tool_call = ToolCall(
@@ -137,6 +139,7 @@ async def test_kairos_allows_safe_command():
 
     bus = EventBus()
     kairos = KairosAgent(bus)
+    wire(bus, kairos)
     executor = ToolExecutor(bus)
 
     tool_call = ToolCall(

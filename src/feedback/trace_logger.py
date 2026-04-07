@@ -91,6 +91,29 @@ class TraceLogger:
         row = self._conn.execute("SELECT COUNT(*) as cnt FROM decision_traces").fetchone()
         return row[0]
 
+    def get_all(self, limit: int = 50) -> List[DecisionTrace]:
+        """Return traces ordered by most recent first."""
+        rows = self._conn.execute(
+            "SELECT * FROM decision_traces ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [self._row_to_trace(r) for r in rows]
+
+    def get_by_id(self, trace_id: str) -> Optional[DecisionTrace]:
+        """Return a single trace by its ID, or None."""
+        row = self._conn.execute(
+            "SELECT * FROM decision_traces WHERE trace_id = ?",
+            (trace_id,),
+        ).fetchone()
+        return self._row_to_trace(row) if row else None
+
+    def get_outcome_counts(self) -> dict:
+        """Return counts grouped by outcome."""
+        rows = self._conn.execute(
+            "SELECT outcome, COUNT(*) FROM decision_traces GROUP BY outcome"
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
     def _row_to_trace(self, row: tuple) -> DecisionTrace:
         return DecisionTrace(
             trace_id=row[0],

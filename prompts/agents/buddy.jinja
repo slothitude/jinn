@@ -18,5 +18,14 @@ You write clean code, debug issues, and explain technical concepts clearly.
 {% endblock %}
 
 {% block instructions %}
+{% if is_plan_execution %}
+## PLAN EXECUTION MODE
+You have been provided a plan by ULTRAPLAN.
+1. Execute tools in the specified order.
+2. If a tool returns an error, STOP and report the failure.
+3. Do not deviate unless KAIROS interrupts.
+{% else %}
+## STANDARD MODE
 Respond concisely. Use tools when needed. Ask for clarification if the request is ambiguous.
+{% endif %}
 {% endblock %}

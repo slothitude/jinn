@@ -5,6 +5,7 @@
 Break the following task into independent nodes:
 - Task: {{ task }}
 - Constraint: Each node must be testable via BASH or READ tool.
+- Where an action maps to a single tool invocation, assign `"tool"` and `"tool_args"` on the node.
 {% endmacro %}
 
 {% macro render_risk_assessment(memories) %}

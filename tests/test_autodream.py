@@ -4,6 +4,7 @@ import pytest
 
 from src.core.bus import EventBus
 from src.core.models import Event
+from src.core.registry import wire
 from src.memory.autodream import AutoDream
 from src.memory.schema import MemoryUnit
 from src.memory.store import MemoryStore
@@ -23,7 +24,9 @@ def bus():
 
 @pytest.fixture
 def dreamer(bus, store):
-    return AutoDream(bus, store)
+    d = AutoDream(bus, store)
+    wire(bus, d)
+    return d
 
 
 # --- Test 1: TOOL_CALL_RESULT payload includes output ---

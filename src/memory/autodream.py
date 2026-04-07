@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from src.core.bus import EventBus
 from src.core.models import Event
+from src.core.registry import listens
 from src.memory.schema import MemoryUnit
 from src.memory.store import MemoryStore
 
@@ -53,14 +54,14 @@ class AutoDream:
         self.bus = bus
         self.store = store
         self._pending_failures: list[dict] = []
-        self.bus.subscribe(Event.AGENT_END, self.on_agent_end, priority=80)
-        self.bus.subscribe(Event.TOOL_CALL_RESULT, self._on_tool_call_result, priority=90)
 
+    @listens(Event.TOOL_CALL_RESULT, priority=90)
     async def _on_tool_call_result(self, payload: dict) -> None:
         """Collect failed tool call results for heuristic extraction."""
         if not payload.get("success", True):
             self._pending_failures.append(payload)
 
+    @listens(Event.AGENT_END, priority=80)
     async def on_agent_end(self, payload: dict) -> None:
         """Triggered when any agent finishes execution."""
         agent = payload.get("agent", "unknown")
