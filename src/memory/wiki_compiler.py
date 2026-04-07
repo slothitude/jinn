@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import sqlite3
 import time
@@ -85,14 +86,23 @@ class WikiCompiler:
 
         title = path.stem.replace("_", " ").title()
 
+        # Truncate large files to fit LLM context window (~8K chars)
+        max_raw_chars = 8000
+        raw_for_llm = content[:max_raw_chars]
+        if len(content) > max_raw_chars:
+            raw_for_llm += "\n\n[... truncated from {} total chars ...]".format(
+                len(content)
+            )
+
         # Assemble Librarian prompt
         try:
             prompt = await self.os.assemble_librarian(
-                raw_content=content, category=category, title=title
+                raw_content=raw_for_llm, category=category, title=title
             )
             distilled = await self._call_llm(prompt)
-        except Exception:
+        except Exception as exc:
             # Fallback: use raw content if LLM unavailable
+            print(f"[wiki_compiler] LLM failed for {path.name}: {exc}")
             distilled = content
 
         # Write to wiki store
@@ -158,10 +168,13 @@ class WikiCompiler:
 
     async def _call_llm(self, prompt: str) -> str:
         """Call LLM to produce distilled wiki page content."""
-        return await complete_chat(
-            client=default_client,
-            model=default_model,
-            messages=[{"role": "user", "content": prompt}],
+        return await asyncio.wait_for(
+            complete_chat(
+                client=default_client,
+                model=default_model,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            timeout=300,
         )
 
     def _target_path(self, source_path: str) -> str:

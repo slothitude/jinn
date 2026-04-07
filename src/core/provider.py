@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass, field
 from typing import AsyncGenerator, Any, Dict, List
 
+import httpx
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
@@ -35,6 +36,104 @@ def create_client(config: LLMConfig | None = None) -> AsyncOpenAI:
         base_url=config.base_url,
         api_key=config.api_key,
     )
+
+
+# --- httpx-based fallback (works reliably on Windows + asyncio) ---
+
+
+async def _httpx_chat(
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict[str, str]],
+    timeout: float = 120.0,
+    **kwargs,
+) -> str:
+    """Non-streaming chat completion via raw httpx request."""
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        **kwargs,
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(
+            url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"] or ""
+
+
+async def _httpx_stream(
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict[str, str]],
+    timeout: float = 60.0,
+    **kwargs,
+) -> AsyncGenerator[str, None]:
+    """Streaming chat completion via raw httpx SSE request."""
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        **kwargs,
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream(
+            "POST",
+            url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    if delta.get("content"):
+                        yield delta["content"]
+                except json.JSONDecodeError:
+                    continue
+
+
+# --- Model fallback chain ---
+
+# Preferred model order: newest/capable first, lightweight fallback last
+FALLBACK_MODELS = [
+    "glm-5.1",
+    "glm-5",
+    "glm-5-turbo",
+    "glm-4.7",
+    "glm-4.6",
+    "glm-4.5",
+    "glm-4.5-air",
+]
+
+
+def _get_fallback_chain(preferred: str) -> list[str]:
+    """Build fallback chain starting with preferred model."""
+    chain = [preferred]
+    for m in FALLBACK_MODELS:
+        if m not in chain:
+            chain.append(m)
+    return chain
 
 
 async def stream_chat(
@@ -132,21 +231,39 @@ async def complete_chat(
     messages: list[dict[str, str]],
     **kwargs,
 ) -> str:
-    """Non-streaming chat completion, returns full content."""
-    response = await client.chat.completions.create(
-        model=model,
-        messages=messages,
-        stream=False,
-        **kwargs,
-    )
-    return response.choices[0].message.content or ""
+    """Non-streaming chat completion with model fallback chain.
+
+    Tries httpx first (reliable on Windows), then falls back through
+    available models if the primary one fails.
+    """
+    config = _load_config()
+    chain = _get_fallback_chain(model)
+
+    for m in chain:
+        try:
+            return await _httpx_chat(
+                config.base_url, config.api_key, m, messages, **kwargs
+            )
+        except Exception as e:
+            print(f"[provider] {m} failed ({type(e).__name__}): {str(e)[:200]}")
+            continue
+
+    # Last resort: raw content hint
+    return ""
 
 
 async def list_models(client: AsyncOpenAI | None = None) -> list[str]:
-    """List available model IDs from the provider."""
-    c = client or default_client
-    models = await c.models.list()
-    return sorted(m.id for m in models.data)
+    """List available model IDs from the provider via httpx."""
+    config = _load_config()
+    url = f"{config.base_url.rstrip('/')}/models"
+    async with httpx.AsyncClient(timeout=15.0) as c:
+        resp = await c.get(
+            url,
+            headers={"Authorization": f"Bearer {config.api_key}"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return sorted(m["id"] for m in data.get("data", []))
 
 
 # Module-level singleton for convenience
