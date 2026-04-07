@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="jinn-banner.png" alt="JINN" width="480">
+</div>
+
 # JINN — Programmable Cognition System
 
 A multi-agent framework with an event-driven, layered architecture. All I/O is async.
