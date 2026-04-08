@@ -1,4 +1,4 @@
-"""Web tool schemas and adapter for web_eyes integration.
+﻿"""Web tool schemas and adapter for web_eyes integration.
 
 Provides 6 tools (search, crawl, summarize, ask, see, look) that wrap
 the web_eyes controller. All imports are lazy — if web_eyes or its
@@ -193,14 +193,6 @@ class WebToolsAdapter:
         self._controller = ctrl
         return ctrl
 
-    def _get_summarizer(self):
-        """Lazily import web_eyes summarizer module."""
-        if self._summarizer is not None:
-            return self._summarizer
-        self._ensure_path()
-        import summarizer as summ  # type: ignore[import-not-found]
-        self._summarizer = summ
-        return summ
 
     # -- public API ---------------------------------------------------------
 
@@ -213,7 +205,8 @@ class WebToolsAdapter:
         except (ImportError, ModuleNotFoundError) as exc:
             return f"Web tools unavailable: web_eyes not installed ({exc})"
         try:
-            return await ctrl.search_and_crawl(query, limit=limit)
+            resp = await ctrl.search_and_crawl(query, self._crawler, limit=limit)
+            return resp.summary
         except Exception as exc:
             return f"Web search error: {exc}"
 
@@ -226,7 +219,8 @@ class WebToolsAdapter:
         except (ImportError, ModuleNotFoundError) as exc:
             return f"Web tools unavailable: web_eyes not installed ({exc})"
         try:
-            return await ctrl.crawl_only(urls)
+            resp = await ctrl.crawl_only(urls, self._crawler)
+            return resp.content
         except Exception as exc:
             return f"Web crawl error: {exc}"
 
@@ -239,7 +233,8 @@ class WebToolsAdapter:
         except (ImportError, ModuleNotFoundError) as exc:
             return f"Web tools unavailable: web_eyes not installed ({exc})"
         try:
-            return await ctrl.summarize_urls(urls, instruction=instruction)
+            resp = await ctrl.summarize_urls(urls, self._crawler, instruction=instruction)
+            return resp.summary
         except Exception as exc:
             return f"Web summarize error: {exc}"
 
@@ -252,7 +247,8 @@ class WebToolsAdapter:
         except (ImportError, ModuleNotFoundError) as exc:
             return f"Web tools unavailable: web_eyes not installed ({exc})"
         try:
-            return await ctrl.ask_question(question, scrape_top=scrape_top)
+            resp = await ctrl.ask_question(question, self._crawler, scrape_top=scrape_top)
+            return resp.answer
         except Exception as exc:
             return f"Web ask error: {exc}"
 
@@ -270,21 +266,24 @@ class WebToolsAdapter:
         except (ImportError, ModuleNotFoundError) as exc:
             return f"Web tools unavailable: web_eyes not installed ({exc})"
         try:
-            return await ctrl.see_urls(
+            resp = await ctrl.see_urls(
                 urls,
+                self._crawler,
                 instruction=instruction,
                 extract_prompt=extract_prompt,
             )
+            return resp.summary
         except Exception as exc:
             return f"Web see error: {exc}"
 
     async def look(self, image_base64: str, instruction: str | None = None) -> str:
         try:
-            summ = self._get_summarizer()
+            ctrl = self._get_controller()
         except (ImportError, ModuleNotFoundError) as exc:
             return f"Web tools unavailable: web_eyes not installed ({exc})"
         try:
-            return await summ.vision_extract(image_base64, instruction=instruction)
+            resp = await ctrl.analyze_image(image_base64, instruction=instruction)
+            return resp.description
         except Exception as exc:
             return f"Web look error: {exc}"
 
