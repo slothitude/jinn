@@ -144,13 +144,9 @@ async def main() -> None:
 
         if user_input.startswith("/restart"):
             print("Restarting JINN...")
-            await tool_executor.close_web()
-            store.close()
-            wiki_store.close()
-            trace_logger.close()
-            if renderer:
-                renderer.stop()
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            os.system("cls" if os.name == "nt" else "clear")
+            print("=== JINN — Programmable Cognition System ===\n")
+            continue
 
         if user_input.startswith("/update"):
             print("Pulling latest changes...")
@@ -164,14 +160,7 @@ async def main() -> None:
             stdout, _ = await proc.communicate()
             print(stdout.decode(errors="replace"))
             if proc.returncode == 0:
-                print("Update successful. Restarting...")
-                await tool_executor.close_web()
-                store.close()
-                wiki_store.close()
-                trace_logger.close()
-                if renderer:
-                    renderer.stop()
-                os.execv(sys.executable, [sys.executable] + sys.argv)
+                print("Update successful.")
             else:
                 print("Update failed.")
             continue
