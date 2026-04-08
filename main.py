@@ -160,7 +160,8 @@ async def main() -> None:
             else:
                 if renderer:
                     renderer.pause()
-                user_input = input("> ").strip()
+                loop = asyncio.get_event_loop()
+                user_input = await loop.run_in_executor(None, lambda: input("> ").strip())
                 if renderer:
                     renderer.resume()
         except (EOFError, KeyboardInterrupt):
