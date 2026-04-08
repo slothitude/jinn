@@ -10,9 +10,12 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+from aiohttp import web
+
 from src.core.bus import EventBus
 from src.core.models import AgentRequest, AgentState, Event
 from src.core.query_engine import QueryEngine
+from src.core.resource_manager import ResourceManager
 from src.agents.buddy import BuddyAgent
 from src.agents.kairos import KairosAgent
 from src.agents.ultraplan import UltraplanAgent
@@ -30,6 +33,7 @@ from src.memory.autodream import AutoDream
 from src.feedback.trace_logger import TraceLogger
 from src.feedback.observability import register_feedback_hooks
 from src.core.registry import wire
+from src.dashboard.server import DashboardServer
 
 
 def _read_lines_sync():
@@ -42,6 +46,11 @@ async def main() -> None:
     # L2: EventBus
     bus = EventBus()
 
+    # L2.5: ResourceManager — provider registry + quota tracking
+    # Profiles loaded from defaults in resource_manager.py
+    # Override via env: ZHIPU_RATE_LIMIT, ZHIPU_RATE_WINDOW, ZHIPU_PRIORITY, etc.
+    rm = ResourceManager.from_defaults()
+
     # L4: Memory
     store = MemoryStore()
     wiki_store = WikiStore()
@@ -53,6 +62,13 @@ async def main() -> None:
     ultraplan = UltraplanAgent(bus)
     orchestrator = OrchestratorAgent(bus, provider="zhipu")
     supervisor = SupervisorAgent(bus, provider="zhipu")
+
+    # Wire ResourceManager into all agents
+    buddy.set_resource_manager(rm, "BUDDY")
+    kairos.set_resource_manager(rm, "KAIROS")
+    ultraplan.set_resource_manager(rm, "ULTRAPLAN")
+    orchestrator.set_resource_manager(rm, "ORCHESTRATOR")
+    supervisor.set_resource_manager(rm, "SUPERVISOR")
 
     # Wire declarative subscriptions via @listens decorators
     wire(bus, autodream, kairos, buddy, orchestrator, supervisor)
@@ -83,6 +99,7 @@ async def main() -> None:
 
     # L3-L7: QueryEngine orchestrator
     engine = QueryEngine(bus)
+    engine.set_resource_manager(rm)
     engine.register_agent(buddy)
     engine.register_agent(kairos)
     engine.register_agent(ultraplan)
@@ -97,11 +114,29 @@ async def main() -> None:
     # Wiki Compiler (needs PromptOS from QueryEngine)
     compiler = WikiCompiler(bus, engine.prompt_os, wiki_store)
 
+    # Dashboard (web UI)
+    dashboard = DashboardServer(
+        trace_logger=trace_logger,
+        wiki_store=wiki_store,
+        memory_store=store,
+        bus=bus,
+        query_engine=engine,
+    )
+    dashboard_runner = web.AppRunner(dashboard.app)
+    await dashboard_runner.setup()
+    dashboard_site = web.TCPSite(dashboard_runner, "localhost", 8080)
+    await dashboard_site.start()
+
     # Session state
     state = AgentState(session_id="cli-session-001")
 
     if renderer is None:
         print("=== JINN — Programmable Cognition System ===")
+        print("Dashboard: http://localhost:8080")
+        quota_status = rm.get_quota_status()
+        for pname, info in quota_status.items():
+            remaining = "unlimited" if info["remaining"] < 0 else f"{info['remaining']}/{info['limit']}"
+            print(f"  [provider] {pname}: {remaining} requests remaining")
         if WebToolsAdapter.is_available():
             print("[web] web_eyes integration available")
         if pipe_mode:
@@ -165,6 +200,10 @@ async def main() -> None:
                 print("Update failed.")
             continue
 
+        if user_input.startswith("/dashboard"):
+            print("Dashboard: http://localhost:8080")
+            continue
+
         if user_input.startswith("/compile"):
             parts = user_input.split()
             raw_dir = "raw/godot"
@@ -212,6 +251,7 @@ async def main() -> None:
     # Cleanup
     if renderer:
         renderer.stop()
+    await dashboard_runner.cleanup()
     await tool_executor.close_web()
     store.close()
     wiki_store.close()

@@ -26,6 +26,14 @@ class QueryEngine:
     def register_agent(self, agent: BaseAgent) -> None:
         self.agents[agent.name] = agent
 
+    def set_resource_manager(self, rm) -> None:
+        """Wire a ResourceManager into all agents."""
+        self._resource_manager = rm
+
+    @property
+    def resource_manager(self):
+        return getattr(self, '_resource_manager', None)
+
     def _parse_plan(self, text: str) -> Optional[PlanGraph]:
         """Extract JSON PlanGraph from agent output."""
         try:
@@ -58,6 +66,13 @@ class QueryEngine:
         # L3: Policy decision
         decision = await self.policy.decide(request)
 
+        # Apply provider/model overrides from request metadata (e.g. dashboard)
+        if request.metadata:
+            if request.metadata.get("provider_override") and not decision.provider_override:
+                decision.provider_override = request.metadata["provider_override"]
+            if request.metadata.get("model_override") and not decision.model_override:
+                decision.model_override = request.metadata["model_override"]
+
         # L4: Memory retrieval — use wiki-aware retrieval when available
         memory_data: dict[str, Any] = {}
         if self.wiki_retriever:
@@ -77,6 +92,13 @@ class QueryEngine:
         agent = self.agents.get(decision.agent_id, self.agents.get("BUDDY"))
         if not agent:
             raise RuntimeError(f"No agent registered for {decision.agent_id}")
+
+        # Apply provider/model overrides from PolicyDecision
+        if decision.provider_override or decision.model_override:
+            if decision.provider_override:
+                agent._ensure_client(decision.provider_override)
+            if decision.model_override:
+                agent._model = decision.model_override
 
         # Ensure KAIROS knows about the current state if it's not the main agent
         kairos = self.agents.get("KAIROS")

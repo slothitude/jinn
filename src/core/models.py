@@ -77,6 +77,8 @@ class PolicyDecision(BaseModel):
     agent_id: str = "BUDDY"
     model_route: str = "sonnet"
     memory_strategy: str = "standard"
+    provider_override: str | None = None
+    model_override: str | None = None
 
 
 class ToolCall(BaseModel):

@@ -19,7 +19,8 @@ pytest -k "test_policy"    # Run tests by name pattern
 |---------|---------|
 | `/restart` | Clear screen and continue session |
 | `/update` | `git pull origin master` and print result |
-| `/compile [dir] [--limit N] [--category name]` | Compile raw docs into wiki pages |
+| `/compile [dir] [--limit N] [--category name]` | Compile raw docs into encyclopedia pages |
+| `/dashboard` | Print dashboard URL |
 | `quit` / `exit` | Shutdown |
 
 ## Architecture
@@ -32,6 +33,7 @@ JINN is a programmable cognition system — a multi-agent framework with an even
 |-------|-----------|----------|
 | L2 | EventBus (reactive backbone) | `src/core/bus.py` |
 | L2.5 | LLM Provider (OpenAI-compatible client) | `src/core/provider.py` |
+| L2.6 | ResourceManager (quota tracking + fallback chains) | `src/core/resource_manager.py` |
 | L3 | PolicyEngine (request routing) | `src/core/policy_engine.py` |
 | L4 | Memory (SQLite store + retrieval + AutoDream consolidation) | `src/memory/` |
 | L5 | PromptOS (Jinja2 prompt assembly) | `src/promptos/engine.py` |
@@ -43,7 +45,7 @@ JINN is a programmable cognition system — a multi-agent framework with an even
 ### Request flow
 
 `main.py` wires everything. A user input flows through `QueryEngine.process()`:
-1. **PolicyEngine** — keyword-based intent matching + complexity-based escalation (threshold 0.8) routes to an agent.
+1. **PolicyEngine** — keyword-based intent matching + structural multi-part detection + complexity-based escalation (threshold 0.8) routes to an agent.
 2. **Memory retrieval** — tag-filtered SQLite lookup with composite ranking (relevance 0.4 + importance 0.3 + recency 0.2 + policy 0.1).
 3. **PromptOS** — Jinja2 template assembly from `prompts/` (base → agent-specific → macros like `strategy.jinja`).
 4. **Agent execution** — `BaseAgent.execute(prompt, state)` streams LLM content.
@@ -95,6 +97,17 @@ ORCHESTRATOR (Tier 0) — provider: zhipu
 
 Module-level `default_client` and `default_model` singletons for backward compatibility. Multi-provider support via `get_provider_client(provider_name)` which creates/caches separate `AsyncOpenAI` clients per provider (zhipu, nvidia). Agents use `self._client`/`self._model` (set in `BaseAgent.__init__` from provider param or defaults) — `stream_llm()` no longer uses module singletons directly. If the LLM is unavailable, agents fall back to mock simulation so tests run offline.
 
+### ResourceManager
+
+`src/core/resource_manager.py` — central provider registry with quota tracking and fallback chains. Registered in `main.py` at startup and wired into all agents via `set_resource_manager(rm, tier)`.
+
+- **ProviderProfile** — per-provider config: name, base_url, api_key_env, models, rate_limit, rate_window_secs, priority
+- **Quota tracking** — sliding window (timestamps pruned after `rate_window_secs`). `check_quota()` returns False when used >= rate_limit. rate_limit=0 means unlimited.
+- **Fallback chains** — per-tier ordered list of `(provider, model)` pairs. Planning tiers (ORCHESTRATOR, SUPERVISOR) prefer zhipu; worker tiers (BUDDY) prefer nvidia. On LLM failure, `stream_llm()` tries the next entry in the chain.
+- **Fallback chain example:** ORCHESTRATOR: `[(zhipu, glm-5.1), (zhipu, glm-5), (nvidia, llama-70b), ...]` — when zhipu quota is exhausted, automatically routes to nvidia.
+- **Dashboard integration** — provider/model dropdown in chat UI sends overrides via `PolicyDecision.provider_override`/`model_override`.
+- **Per-task routing** — `delegate_batch`/`spawn_workers` accept optional `provider`/`model` per task spec; `AgentToolExecutor` creates fresh agents for per-task providers.
+
 ### EventBus
 
 Error-isolated, priority-based pub/sub. Lower number = runs first. Safety hooks at 0, core logic at 50, observers at 100. Features:
@@ -116,7 +129,44 @@ Error-isolated, priority-based pub/sub. Lower number = runs first. Safety hooks 
 
 ### Data
 
-SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
+SQLite databases in `data/` (`memory.db`, `traces.db`, `wiki.db`) — gitignored.
+
+### Dashboard (Web UI)
+
+`src/dashboard/server.py` provides an aiohttp web dashboard at `http://localhost:8080`. Started automatically alongside CLI in `main.py`. Tabbed SPA (embedded HTML/CSS/JS, no build tools):
+
+| Tab | Purpose |
+|-----|---------|
+| **Chat** | Talk to JINN via `POST /api/chat` → QueryEngine |
+| **Encyclopedia** | Browse JINN's internal knowledge base (wiki pages by category, search) |
+| **Memory** | View JINN's episodic memories with tags and importance |
+| **Traces** | Decision trace timeline (policy, memory, tool calls, outcomes) |
+| **Events** | Live SSE stream of cognition events from EventBus |
+
+**API endpoints:**
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/chat` | Send message to JINN via QueryEngine |
+| `GET /api/status` | Version, uptime, active agents |
+| `GET /api/encyclopedia` | Encyclopedia index grouped by category |
+| `GET /api/encyclopedia/{id}` | Full encyclopedia page |
+| `GET /api/encyclopedia/search?q=` | Search JINN's knowledge |
+| `GET /api/memory` | Episodic memories |
+| `GET /api/traces` | Decision traces |
+| `GET /api/traces/{id}` | Trace detail |
+| `GET /api/stats` | Outcome stats |
+| `GET /api/events` | SSE stream — live cognition events |
+
+**DashboardServer** constructor: `(trace_logger, wiki_store=None, memory_store=None, bus=None, query_engine=None)`. Backward-compatible — existing tests pass `trace_logger` only.
+
+### Encyclopedia (Wiki)
+
+The wiki is JINN's internal encyclopedia — structured knowledge it builds and references during cognition. NOT a user docs browser. Pages are compiled from raw docs via the encyclopedia compiler (`WikiCompiler`) and stored in `WikiStore` (SQLite).
+
+- **WikiStore** (`src/memory/wiki.py`) — CRUD for encyclopedia pages (title, category, summary, content, tags)
+- **WikiCompiler** (`src/memory/wiki_compiler.py`) — reads raw docs, distills via LLM into concise encyclopedia pages
+- **Wiki Export** (`src/memory/wiki_export.py`) — exports encyclopedia pages to standalone HTML
 
 ### Web Tools (web_eyes integration)
 
@@ -166,7 +216,7 @@ SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 - `pytest-asyncio>=0.23` with `asyncio_mode = "auto"` — test functions can be `async def` directly
 - Agents yield chunks via async generators; never return a single string
 - Use `Event` enum constants (not raw strings) for all event types
-- Policy routing is keyword-based in `POLICY_RULES` list — add new intents there
+- Policy routing is keyword-based in `POLICY_RULES` list + structural multi-part detection via `_detect_multi_part()` — add new intents there
 - Memory tags determine what each agent sees; role-to-tag mapping lives in the retrieval pipeline
 - `emit()` returns `EventResult` — check `.cancelled` and `.errors` for production error handling
 
@@ -175,6 +225,9 @@ SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 - `test_dashboard.py` is excluded from pytest — its `aiohttp` server import hangs during collection
 - `BaseAgent` accepts optional `provider` param — pass `provider="nvidia"` to route to a different LLM; omit for default provider
 - `AgentToolExecutor` intercepts delegation tools (`delegate_batch`, `spawn_workers`) and runs agents in parallel via `asyncio.gather()`; falls through to `ToolExecutor` for bash/read/write/web tools
+- `ResourceManager` (`src/core/resource_manager.py`) tracks per-provider quotas via sliding window and builds fallback chains per agent tier; agents call `get_next_available(tier)` before LLM calls
+- `BaseAgent` has `_resource_manager` and `_tier` attributes (set via `set_resource_manager()`); `stream_llm()` checks quota before calling LLM and falls back through chain on failure
+- `PolicyDecision` has optional `provider_override`/`model_override` fields — set by dashboard chat or request metadata to force a specific provider/model
 - Web tools (`web_search`, `web_crawl`, `web_summarize`, `web_ask`, `web_see`, `web_look`) are defined in `src/execution/web_tools.py` as `WEB_TOOLS` list; added to all agent tool loops via `DEFAULT_TOOLS + WEB_TOOLS`
 - Self tools (`version_info`, `version_bump`, `test_run`, `git_commit_push`, `self_update`) are defined in `src/execution/self_tools.py` as `SELF_TOOLS` list; added via `DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS`
 - `WebToolsAdapter.is_available()` checks if web_eyes can be imported; `ToolExecutor.close_web()` shuts down the crawler at exit

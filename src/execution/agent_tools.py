@@ -42,6 +42,14 @@ DELEGATE_BATCH_TOOL = ToolSchema(
                             "type": "string",
                             "enum": ["code", "research", "testing", "general"],
                         },
+                        "provider": {
+                            "type": "string",
+                            "description": "Optional provider override (e.g. 'nvidia', 'zhipu')",
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "Optional model override for the worker",
+                        },
                     },
                     "required": ["task"],
                 },
@@ -66,6 +74,14 @@ SPAWN_WORKERS_TOOL = ToolSchema(
                     "properties": {
                         "task": {"type": "string"},
                         "acceptance_criteria": {"type": "string"},
+                        "provider": {
+                            "type": "string",
+                            "description": "Optional provider override (e.g. 'nvidia', 'zhipu')",
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "Optional model override for the worker",
+                        },
                     },
                     "required": ["task"],
                 },
@@ -153,12 +169,26 @@ class AgentToolExecutor:
         async def run_task(idx: int, spec: dict) -> tuple[int, str, bool]:
             task_desc = spec.get("task", "")
             constraints = spec.get("constraints", "") or spec.get("acceptance_criteria", "")
+            task_provider = spec.get("provider")
+            task_model = spec.get("model")
 
             ctx = DelegationContext(
                 task_description=task_desc,
                 constraints=constraints,
             )
             scoped_state = AgentState(session_id=f"del-{uuid4().hex[:8]}", history=[])
+
+            # Pick agent — optionally create a fresh one with per-task provider
+            task_agent = agent
+            if task_provider and task_provider != agent._provider:
+                # Create a fresh agent for this specific provider
+                task_agent = type(agent)(
+                    name=agent.name, bus=agent.bus, provider=task_provider
+                )
+                if task_agent._agent_tool_executor is None and agent._agent_tool_executor:
+                    task_agent._agent_tool_executor = agent._agent_tool_executor
+            if task_model:
+                task_agent._model = task_model
 
             await self.bus.emit(Event.DELEGATION_START, {
                 "task": task_desc,
@@ -172,7 +202,7 @@ class AgentToolExecutor:
 
             result_text = ""
             try:
-                async for chunk in agent.execute(prompt, scoped_state):
+                async for chunk in task_agent.execute(prompt, scoped_state):
                     result_text += chunk
                 success = True
             except Exception as e:

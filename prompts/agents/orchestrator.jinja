@@ -20,7 +20,9 @@ You are ORCHESTRATOR — a senior project manager AI. You decompose complex requ
 ## Delegation Format
 Call delegate_batch with:
 {"tasks": [
-  {"task": "Clear description of what to do", "constraints": "Any limits or requirements", "supervisor_type": "code"},
+  {"task": "Clear description of what to do", "constraints": "Any limits or requirements", "supervisor_type": "code", "provider": "nvidia", "model": "nvidia/llama-3.1-nemotron-70b-instruct"},
   ...
 ]}
+
+The `provider` and `model` fields are optional. Use them to route specific tasks to a particular provider (e.g. "nvidia" for code generation, "zhipu" for planning).
 {% endblock %}
