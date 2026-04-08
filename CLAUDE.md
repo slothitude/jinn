@@ -41,7 +41,9 @@ JINN is a programmable cognition system — a multi-agent framework with an even
 | L6-L7 | Agents (execute + stream) | `src/agents/` |
 | L7.5 | AgentToolExecutor (batch delegation) | `src/execution/agent_tools.py` |
 | L7.6 | Self Tools (version, test, git) | `src/execution/self_tools.py` |
+| L7.7 | Web Tools (web_eyes integration) | `src/execution/web_tools.py` |
 | L8 | Feedback (safety monitors, trace logging) | `src.feedback/` |
+| L9 | Rich CLI Renderer (live orchestration tree) | `src/cli/` |
 
 ### Request flow
 
@@ -122,6 +124,7 @@ Error-isolated, priority-based pub/sub. Lower number = runs first. Safety hooks 
 - **Event history** — optional `max_history` constructor param, `get_history()` for introspection
 - **`list_subscribers()`** — returns priority, name, callback for each subscriber
 - **Typed events** — use `Event` string enum (defined in `src/core/models.py`) instead of raw strings
+- **Declarative wiring** — `@listens(event_type, priority)` decorator on methods + `wire(bus, *components)` in `src/core/registry.py` scans and subscribes them. Used in `main.py` for all event-driven components (agents, autodream, reaper).
 
 ### Prompt templates
 
@@ -133,7 +136,7 @@ Error-isolated, priority-based pub/sub. Lower number = runs first. Safety hooks 
 
 ### Data
 
-SQLite databases in `data/` (`memory.db`, `traces.db`, `wiki.db`) — gitignored.
+SQLite databases in `data/` (`memory.db`, `traces.db`, `wiki.db`, `crypt.db`) — gitignored.
 
 ### Dashboard (Web UI)
 
@@ -223,18 +226,9 @@ The wiki is JINN's internal encyclopedia — structured knowledge it builds and 
 - Policy routing is keyword-based in `POLICY_RULES` list + structural multi-part detection via `_detect_multi_part()` — add new intents there
 - Memory tags determine what each agent sees; role-to-tag mapping lives in the retrieval pipeline
 - `emit()` returns `EventResult` — check `.cancelled` and `.errors` for production error handling
-
 - When no LLM is available, agents fall back to mock simulation (echo fallback at buddy.py:104-114, or ultraplan.py:24-35) — tests run offline via mock
-- To run specific tests: `python tests/test_ultimate.py` (standalone runner, no pytest required)
 - `test_dashboard.py` is excluded from pytest — its `aiohttp` server import hangs during collection
-- `BaseAgent` accepts optional `provider` param — pass `provider="nvidia"` to route to a different LLM; omit for default provider
-- `AgentToolExecutor` intercepts delegation tools (`delegate_batch`, `spawn_workers`) and runs agents in parallel via `asyncio.gather()`; falls through to `ToolExecutor` for bash/read/write/web tools
-- `ResourceManager` (`src/core/resource_manager.py`) tracks per-provider quotas via sliding window and builds fallback chains per agent tier; initialized via `from_defaults()` with `DEFAULT_PROFILES`; agents call `get_next_available(tier)` before LLM calls
-- `BaseAgent` has `_resource_manager` and `_tier` attributes (set via `set_resource_manager()`); `stream_llm()` checks quota before calling LLM and falls back through chain on failure; `_ensure_client(provider)` swaps the LLM client to a different provider
-- `PolicyDecision` has optional `provider_override`/`model_override` fields — set by dashboard chat or request metadata to force a specific provider/model
-- Provider rate limits are configurable via env vars: `<PROVIDER>_RATE_LIMIT`, `<PROVIDER>_RATE_WINDOW`, `<PROVIDER>_PRIORITY` (e.g. `ZHIPU_RATE_LIMIT=200`, `NVIDIA_PRIORITY=0`)
-- Web tools (`web_search`, `web_crawl`, `web_summarize`, `web_ask`, `web_see`, `web_look`) are defined in `src/execution/web_tools.py` as `WEB_TOOLS` list; added to all agent tool loops via `DEFAULT_TOOLS + WEB_TOOLS`
-- Self tools (`version_info`, `version_bump`, `test_run`, `git_commit_push`, `self_update`) are defined in `src/execution/self_tools.py` as `SELF_TOOLS` list; added via `DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS`
-- `WebToolsAdapter.is_available()` checks if web_eyes can be imported; `ToolExecutor.close_web()` shuts down the crawler at exit
+- `python tests/test_ultimate.py` — standalone test runner (no pytest required)
+- Tool list composition: `DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS` — each is a list of `ToolSchema` defined in `src/execution/toolbox.py`, `web_tools.py`, `self_tools.py`
 - Install web extras: `pip install -e ".[web]"` — core JINN works without them
 - Windows install: run `install.bat` to install + add to PATH, then `jinn` to launch
