@@ -1,0 +1,12 @@
+{# Render ancestral wisdom from deceased JINN workers #}
+{% macro render_lessons(lessons, max_lessons=10) %}
+### Ancestral Wisdom
+{% if lessons %}
+These lessons were earned by JINNs who came before:
+{% for lesson in (lessons or [])[:max_lessons] %}
+- {{ lesson }}
+{% endfor %}
+{% else %}
+No ancestral wisdom yet. You are the first.
+{% endif %}
+{% endmacro %}

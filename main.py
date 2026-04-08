@@ -26,10 +26,12 @@ from src.execution.agent_tools import AgentToolExecutor
 from src.execution.web_tools import WebToolsAdapter
 from src.memory.store import MemoryStore
 from src.memory.wiki import WikiStore
+from src.memory.crypt import CryptStore
 from src.memory.retrieval import retrieve as memory_retrieve
 from src.memory.retrieval import retrieve_with_wiki
 from src.memory.wiki_compiler import WikiCompiler
 from src.memory.autodream import AutoDream
+from src.core.reaper import GrimReaper
 from src.feedback.trace_logger import TraceLogger
 from src.feedback.observability import register_feedback_hooks
 from src.core.registry import wire
@@ -54,7 +56,9 @@ async def main() -> None:
     # L4: Memory
     store = MemoryStore()
     wiki_store = WikiStore()
+    crypt_store = CryptStore()
     autodream = AutoDream(bus, store)
+    reaper = GrimReaper(bus, crypt_store, store)
 
     # L6: Agents
     buddy = BuddyAgent(bus)
@@ -71,7 +75,7 @@ async def main() -> None:
     supervisor.set_resource_manager(rm, "SUPERVISOR")
 
     # Wire declarative subscriptions via @listens decorators
-    wire(bus, autodream, kairos, buddy, orchestrator, supervisor)
+    wire(bus, autodream, kairos, buddy, orchestrator, supervisor, reaper)
 
     # L7: Tool Execution
     tool_executor = ToolExecutor(bus)
@@ -99,6 +103,7 @@ async def main() -> None:
 
     # L3-L7: QueryEngine orchestrator
     engine = QueryEngine(bus)
+    engine.prompt_os._crypt_store = crypt_store
     engine.set_resource_manager(rm)
     engine.register_agent(buddy)
     engine.register_agent(kairos)
@@ -256,6 +261,7 @@ async def main() -> None:
     await tool_executor.close_web()
     store.close()
     wiki_store.close()
+    crypt_store.close()
     trace_logger.close()
 
 

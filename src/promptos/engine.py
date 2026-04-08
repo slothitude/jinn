@@ -68,6 +68,7 @@ class PromptOS:
         tools: Optional[List[ToolSchema]] = None,
         user_permission_level: int = 2,
         wiki_store: Optional[Any] = None,
+        crypt_store: Optional[Any] = None,
     ) -> None:
         if tools is None:
             from src.execution.toolbox import DEFAULT_TOOLS
@@ -78,6 +79,7 @@ class PromptOS:
             self.tools = tools
         self.user_permission_level = user_permission_level
         self._wiki_store = wiki_store
+        self._crypt_store = crypt_store
 
     def _build_context(
         self,
@@ -91,6 +93,7 @@ class PromptOS:
         category: str = "General",
         title: str = "Untitled",
         is_plan_execution: bool = False,
+        crypt_lessons: Optional[list] = None,
     ) -> Dict[str, Any]:
         """Shared context builder for all assemble methods."""
         from src.core.version import get_version, get_git_info
@@ -111,6 +114,7 @@ class PromptOS:
             "jinn_version": get_version(),
             "jinn_git_branch": git["branch"],
             "jinn_git_commit": git["commit"],
+            "crypt_lessons": crypt_lessons or [],
         }
 
     async def assemble(
@@ -119,6 +123,16 @@ class PromptOS:
         memory_data: Dict[str, Any],
         agent_id: str,
     ) -> str:
+        # Fetch crypt lessons — relevance-ranked, fallback to recent
+        crypt_lessons = []
+        if self._crypt_store:
+            try:
+                crypt_lessons = self._crypt_store.search_lessons(request.input_text, limit=10)
+                if not crypt_lessons:
+                    crypt_lessons = self._crypt_store.get_recent_lessons(limit=10)
+            except Exception:
+                crypt_lessons = []
+
         templates = self.TEMPLATE_MAP.get(agent_id, ["base/system", "agents/buddy"])
         context = self._build_context(
             agent_id,
@@ -127,6 +141,7 @@ class PromptOS:
             wiki_pages=memory_data.get("wiki_pages", []),
             wiki_index=self._wiki_store.get_index() if self._wiki_store else memory_data.get("wiki_index", {}),
             is_plan_execution=request.metadata.get("is_plan_execution", False) if request.metadata else False,
+            crypt_lessons=crypt_lessons,
         )
         return await render_graph(templates, context)
 

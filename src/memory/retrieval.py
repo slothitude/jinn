@@ -7,13 +7,15 @@ from src.memory.ranking import rank
 
 # Role-to-tag mapping — each agent sees relevant memory types
 ROLE_TAG_MAP = {
-    "buddy": ["preference", "heuristic"],
+    "buddy": ["preference", "heuristic", "lesson"],
     "kairos": ["constraint", "anomaly"],
-    "ultraplan": ["constraint", "failure"],
-    "standard": ["preference", "heuristic"],
+    "ultraplan": ["constraint", "failure", "lesson"],
+    "orchestrator": ["constraint", "lesson"],
+    "supervisor": ["preference", "heuristic", "lesson"],
+    "standard": ["preference", "heuristic", "lesson"],
     "failures": ["failure"],
     "anomalies": ["anomaly"],
-    "deep": ["constraint", "failure", "preference", "heuristic"],
+    "deep": ["constraint", "failure", "preference", "heuristic", "lesson"],
 }
 
 

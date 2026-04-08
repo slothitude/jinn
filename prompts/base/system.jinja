@@ -27,6 +27,13 @@ Source: project root. Version in pyproject.toml line 3.
 {% endif %}
 {% endblock %}
 
+{% block ancestry %}
+{% if crypt_lessons %}
+{% import "macros/crypt.jinja" as crypt %}
+{{ crypt.render_lessons(crypt_lessons) }}
+{% endif %}
+{% endblock %}
+
 {% block tools %}
 {# L7 Execution Layer capabilities #}
 {% endblock %}

@@ -17,6 +17,7 @@ from src.core.models import (
     ToolResult,
 )
 from src.execution.toolbox import ToolSchema
+from src.memory.names import assign_name
 
 if TYPE_CHECKING:
     from src.agents.base import BaseAgent
@@ -167,10 +168,15 @@ class AgentToolExecutor:
             )
 
         async def run_task(idx: int, spec: dict) -> tuple[int, str, bool]:
+            import time
+
             task_desc = spec.get("task", "")
             constraints = spec.get("constraints", "") or spec.get("acceptance_criteria", "")
             task_provider = spec.get("provider")
             task_model = spec.get("model")
+
+            jinn_name = assign_name()
+            born_at = time.time()
 
             ctx = DelegationContext(
                 task_description=task_desc,
@@ -180,6 +186,7 @@ class AgentToolExecutor:
 
             # Pick agent — optionally create a fresh one with per-task provider
             task_agent = agent
+            effective_provider = task_provider or getattr(agent, "_provider", "")
             if task_provider and task_provider != agent._provider:
                 # Create a fresh agent for this specific provider
                 task_agent = type(agent)(
@@ -195,6 +202,9 @@ class AgentToolExecutor:
                 "tier": target_agent_name,
                 "index": idx,
                 "session_id": scoped_state.session_id,
+                "jinn_name": jinn_name,
+                "born_at": born_at,
+                "provider": effective_provider,
             })
             prompt = task_desc
             if constraints:
@@ -215,6 +225,9 @@ class AgentToolExecutor:
                 "index": idx,
                 "success": success,
                 "session_id": scoped_state.session_id,
+                "jinn_name": jinn_name,
+                "born_at": born_at,
+                "provider": effective_provider,
             })
             return idx, result_text, success
 
