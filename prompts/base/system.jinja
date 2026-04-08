@@ -9,6 +9,12 @@
 You are a modular component of the Jinn Programmable Cognition System.
 {% endblock %}
 
+{% block self_awareness %}
+## SELF-AWARENESS
+You are JINN v{{ jinn_version | default("unknown") }} ({{ jinn_git_branch | default("?") }}/{{ jinn_git_commit | default("?") }}).
+Source: project root. Version in pyproject.toml line 3.
+{% endblock %}
+
 {% block knowledge %}
 {# Wiki/knowledge index (structured project knowledge) #}
 {{ wiki.render_wiki_index(wiki_index | default({})) }}

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -140,6 +141,38 @@ async def main() -> None:
 
         if renderer:
             renderer.resume()
+
+        if user_input.startswith("/restart"):
+            print("Restarting JINN...")
+            await tool_executor.close_web()
+            store.close()
+            wiki_store.close()
+            trace_logger.close()
+            if renderer:
+                renderer.stop()
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        if user_input.startswith("/update"):
+            print("Pulling latest changes...")
+            proc = await asyncio.create_subprocess_shell(
+                "git pull origin master",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await proc.communicate()
+            print(stdout.decode(errors="replace"))
+            if proc.returncode == 0:
+                print("Update successful. Restarting...")
+                await tool_executor.close_web()
+                store.close()
+                wiki_store.close()
+                trace_logger.close()
+                if renderer:
+                    renderer.stop()
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            else:
+                print("Update failed.")
+            continue
 
         if user_input.startswith("/compile"):
             parts = user_input.split()

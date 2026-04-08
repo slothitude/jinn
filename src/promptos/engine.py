@@ -72,7 +72,8 @@ class PromptOS:
         if tools is None:
             from src.execution.toolbox import DEFAULT_TOOLS
             from src.execution.web_tools import WEB_TOOLS
-            self.tools: List[ToolSchema] = DEFAULT_TOOLS + WEB_TOOLS
+            from src.execution.self_tools import SELF_TOOLS
+            self.tools: List[ToolSchema] = DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS
         else:
             self.tools = tools
         self.user_permission_level = user_permission_level
@@ -92,6 +93,8 @@ class PromptOS:
         is_plan_execution: bool = False,
     ) -> Dict[str, Any]:
         """Shared context builder for all assemble methods."""
+        from src.core.version import get_version, get_git_info
+        git = get_git_info()
         return {
             "memories": memories or [],
             "wiki_pages": wiki_pages or [],
@@ -105,6 +108,9 @@ class PromptOS:
             "category": category,
             "title": title,
             "is_plan_execution": is_plan_execution,
+            "jinn_version": get_version(),
+            "jinn_git_branch": git["branch"],
+            "jinn_git_commit": git["commit"],
         }
 
     async def assemble(

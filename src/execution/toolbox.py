@@ -99,6 +99,7 @@ class ToolExecutor:
         self.sandbox_dir = sandbox_dir or os.path.join(os.getcwd(), "sandbox")
         self.default_timeout = default_timeout
         self._web_adapter: WebToolsAdapter | None = None
+        self._self_adapter: SelfToolsAdapter | None = None
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call with KAIROS safety gate."""
@@ -137,6 +138,11 @@ class ToolExecutor:
             "web_ask": self._execute_web_ask,
             "web_see": self._execute_web_see,
             "web_look": self._execute_web_look,
+            "version_info": self._execute_version_info,
+            "version_bump": self._execute_version_bump,
+            "test_run": self._execute_test_run,
+            "git_commit_push": self._execute_git_commit_push,
+            "self_update": self._execute_self_update,
         }
         handler = dispatchers.get(tool_call.name)
         if handler is None:
@@ -271,3 +277,35 @@ class ToolExecutor:
             instruction=args.get("instruction"),
         )
         return result, not self._is_web_error(result)
+
+    # -- Self tool handlers (lazily initialized) --
+
+    def _get_self_adapter(self):
+        if self._self_adapter is None:
+            from src.execution.self_tools import SelfToolsAdapter
+            self._self_adapter = SelfToolsAdapter()
+        return self._self_adapter
+
+    async def _execute_version_info(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        return await self._get_self_adapter().version_info()
+
+    async def _execute_version_bump(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        return await self._get_self_adapter().version_bump(
+            level=args.get("level", "patch"),
+        )
+
+    async def _execute_test_run(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        return await self._get_self_adapter().test_run(
+            args=args.get("args", ""),
+            timeout=args.get("timeout", 120.0),
+        )
+
+    async def _execute_git_commit_push(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        return await self._get_self_adapter().git_commit_push(
+            message=args.get("message", "update"),
+            files=args.get("files"),
+            test_first=args.get("test_first", True),
+        )
+
+    async def _execute_self_update(self, args: Dict[str, Any]) -> tuple[str, bool]:
+        return await self._get_self_adapter().self_update()

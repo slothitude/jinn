@@ -150,8 +150,9 @@ class BuddyAgent(BaseAgent):
 
         from src.execution.toolbox import DEFAULT_TOOLS
         from src.execution.web_tools import WEB_TOOLS
+        from src.execution.self_tools import SELF_TOOLS
 
-        tools = [t.to_openai_format() for t in DEFAULT_TOOLS + WEB_TOOLS]
+        tools = [t.to_openai_format() for t in DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS]
         messages: list[dict] = [
             {"role": "system", "content": initial_prompt},
             *history_msgs,

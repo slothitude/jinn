@@ -43,3 +43,11 @@ You are in autonomous execution mode. Rules:
 6. Do not stop after one step — chain multiple tool calls to finish the job.
 {% endif %}
 {% endblock %}
+
+{% block self_modification %}
+## SELF-MODIFICATION PROTOCOL
+When modifying files under src/, you MUST:
+1. Run test_run to verify nothing broke.
+2. Call version_bump (level "patch" for fixes, "minor" for features).
+3. Use git_commit_push to commit and push (tests gate runs automatically).
+{% endblock %}
