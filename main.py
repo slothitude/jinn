@@ -154,10 +154,12 @@ async def main() -> None:
 
         if user_input.startswith("/update"):
             print("Pulling latest changes...")
+            _project_root = str(Path(__file__).resolve().parent)
             proc = await asyncio.create_subprocess_shell(
                 "git pull origin master",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                cwd=_project_root,
             )
             stdout, _ = await proc.communicate()
             print(stdout.decode(errors="replace"))
