@@ -1,33 +1,3 @@
 # Godot Wiki Index
 
-- [[404.Rst]] — :github_url: hide
-- [[404.Rst]] — This is **not a documentation page**. The raw source provided is Godot's default
-- [[404.Rst]] — This document details the fallback logic used by the Godot documentation system 
-- [[404.Rst]] — This is the **not-found fallback page** for Godot's Read the Docs documentation 
-- [[Class @Gdscript.Rst]] — :github_url: hide
-- [[Class @Gdscript.Rst]] — :github_url: hide
-- [[Class @Gdscript.Rst]] — :github_url: hide
-- [[Class @Gdscript.Rst]] — :github_url: hide
-- [[Class @Gdscript.Rst]] — **@GDScript** is the scope containing built-in constants, functions, and annotat
-- [[Class @Gdscript.Rst]] — `@GDScript` is the global scope namespace for GDScript-specific utility function
-- [[Class @Globalscope.Rst]] — :github_url: hide
-- [[Class @Globalscope.Rst]] — :github_url: hide
-- [[Class @Globalscope.Rst]] — :github_url: hide
-- [[Class @Globalscope.Rst]] — Global scope containing enumerated constants, built-in functions, and singleton 
-- [[Class Aabb.Rst]] — :github_url: hide
-- [[Class Aabb.Rst]] — :github_url: hide
-- [[Class Aabb.Rst]] — :github_url: hide
-- [[Class Acceptdialog.Rst]] — :github_url: hide
-- [[Class Acceptdialog.Rst]] — :github_url: hide
-- [[Class Aescontext.Rst]] — :github_url: hide
-- [[Class Aescontext.Rst]] — :github_url: hide
-- [[Complying With Licenses.Rst]] — :allow_comments: False
-- [[Complying With Licenses.Rst]] — Godot Engine is distributed under the MIT License, allowing free commercial use 
-- [[Docs Changelog.Rst]] — :allow_comments: False
-- [[Docs Changelog.Rst]] — This document tracks **new pages added** to the Godot documentation since versio
-- [[Faq.Rst]] — :allow_comments: False
-- [[Faq.Rst]] — Godot is a free, open-source MIT-licensed game engine supporting desktop, mobile
-- [[Faq.Rst]] — Godot is a free and open-source MIT-licensed engine usable for any purpose (comm
-- [[Introduction.Rst]] — :allow_comments: False
-- [[Introduction.Rst]] — Godot Engine is a feature-packed, free, and open-source 2D and 3D game engine re
-- [[Introduction.Rst]] — Godot Engine is a free, open-source (MIT license), community-driven 2D and 3D ga
+- [[Physics Nodes]] — See [[CharacterBody2D]].

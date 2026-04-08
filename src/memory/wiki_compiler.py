@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.bus import EventBus
-from src.core.provider import complete_chat, default_client, default_model
+from src.core.provider import _httpx_chat, get_provider_client, PROVIDERS
 from src.memory.wiki import WikiPage, WikiStore
 from src.promptos.engine import PromptOS
 
@@ -167,11 +167,19 @@ class WikiCompiler:
         return result
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call LLM to produce distilled wiki page content."""
+        """Call LLM to produce distilled wiki page content via nvidia provider."""
+        import os
+
+        profile = PROVIDERS["nvidia"]
+        api_key = os.getenv("LLM_API_KEY", "") or os.getenv("NVIDIA_API_KEY", "")
+        base_url = os.getenv("LLM_BASE_URL", "") or profile["base_url"]
+        model = "google/gemma-4-31b-it"
+
         return await asyncio.wait_for(
-            complete_chat(
-                client=default_client,
-                model=default_model,
+            _httpx_chat(
+                base_url=base_url,
+                api_key=api_key,
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
             ),
             timeout=300,

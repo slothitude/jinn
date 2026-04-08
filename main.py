@@ -191,6 +191,12 @@ async def main() -> None:
             print()
             continue
 
+        if user_input.startswith("/export"):
+            from src.memory.wiki_export import export_to_html
+            pages = export_to_html(Path("wiki/godot"), Path("wiki/html"))
+            print(f"Exported {len(pages)} pages to wiki/html/")
+            continue
+
         request = AgentRequest(session_id=state.session_id, input_text=user_input)
 
         if renderer:
