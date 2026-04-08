@@ -1,6 +1,6 @@
 [project]
 name = "jinn"
-version = "0.4.0"
+version = "0.5.0"
 description = "Programmable Cognition System — not a chatbot"
 requires-python = ">=3.11"
 dependencies = [
