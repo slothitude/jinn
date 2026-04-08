@@ -1,4 +1,4 @@
-"""Export compiled wiki pages to standalone, browsable HTML."""
+"""Export JINN's encyclopedia pages to standalone, browsable HTML."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import markdown as md_lib
 
 
 def export_to_html(wiki_root: Path, output_dir: Path) -> list[str]:
-    """Convert all .md files under *wiki_root* to standalone HTML in *output_dir*.
+    """Export all encyclopedia .md pages to standalone HTML.
 
     Preserves any existing .html files that agents may have written directly.
     Returns list of written file paths (relative to output_dir).
@@ -56,7 +56,7 @@ def export_to_html(wiki_root: Path, output_dir: Path) -> list[str]:
     # Generate index.html
     index_body = _render_index(pages)
     (output_dir / "index.html").write_text(
-        _page_html("Wiki Index", index_body, nav_links),
+        _page_html("Encyclopedia Index", index_body, nav_links),
         encoding="utf-8",
     )
     written.insert(0, "index.html")
@@ -128,7 +128,7 @@ def _page_html(title: str, body: str, nav_links: list[dict]) -> str:
 </head>
 <body>
 <nav class="sidebar">
-  <h2>Wiki Pages</h2>
+  <h2>Encyclopedia</h2>
   <ul>{nav_items}</ul>
 </nav>
 <main class="main">
@@ -140,7 +140,7 @@ def _page_html(title: str, body: str, nav_links: list[dict]) -> str:
 
 
 def _render_index(pages: list[dict]) -> str:
-    """Render the index page body — a simple list of all pages with summaries."""
+    """Render the encyclopedia index — a list of all pages with summaries."""
     items = []
     for p in pages:
         href = p["html_rel"].as_posix()

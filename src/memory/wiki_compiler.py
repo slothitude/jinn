@@ -1,4 +1,7 @@
-"""LLM-powered wiki compiler — distills raw docs into high-density wiki pages."""
+"""Encyclopedia compiler — distills raw docs into high-density knowledge pages.
+
+Reads raw documentation files, assembles a Librarian prompt, and uses an LLM
+to distill them into concise encyclopedia pages stored in JINN's WikiStore."""
 
 from __future__ import annotations
 
@@ -37,7 +40,7 @@ class CompileResult:
 
 
 class WikiCompiler:
-    """Reads raw docs, assembles a Librarian prompt, distills via LLM, writes wiki pages."""
+    """Reads raw docs, distills via LLM into encyclopedia pages for JINN's knowledge base."""
 
     def __init__(
         self,

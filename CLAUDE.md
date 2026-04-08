@@ -20,6 +20,7 @@ pytest -k "test_policy"    # Run tests by name pattern
 | `/restart` | Clear screen and continue session |
 | `/update` | `git pull origin master` and print result |
 | `/compile [dir] [--limit N] [--category name]` | Compile raw docs into encyclopedia pages |
+| `/export` | Export encyclopedia to standalone HTML |
 | `/dashboard` | Print dashboard URL |
 | `quit` / `exit` | Shutdown |
 
@@ -45,13 +46,14 @@ JINN is a programmable cognition system — a multi-agent framework with an even
 ### Request flow
 
 `main.py` wires everything. A user input flows through `QueryEngine.process()`:
-1. **PolicyEngine** — keyword-based intent matching + structural multi-part detection + complexity-based escalation (threshold 0.8) routes to an agent.
-2. **Memory retrieval** — tag-filtered SQLite lookup with composite ranking (relevance 0.4 + importance 0.3 + recency 0.2 + policy 0.1).
-3. **PromptOS** — Jinja2 template assembly from `prompts/` (base → agent-specific → macros like `strategy.jinja`).
-4. **Agent execution** — `BaseAgent.execute(prompt, state)` streams LLM content.
-5. **Plan Detection** — If `ULTRAPLAN` is used and outputs a `PlanGraph` JSON, `QueryEngine` parses it into `AgentState.execution_graph` and auto-transitions to `BUDDY`.
-6. **Multi-step Execution** — `BUDDY` iterates through the `PlanGraph` nodes, updating status and streaming each step.
-7. **EventBus** — broadcasts typed `Event` enum values (`TURN_START`, `AGENT_CHUNK`, `KAIROS_INTERRUPT`, `DELEGATION_START`, `DELEGATION_END`, etc.)
+1. **PolicyEngine** — keyword-based intent matching + structural multi-part detection (`_detect_multi_part()`) + complexity-based escalation (threshold 0.8) routes to an agent.
+2. **ResourceManager** — checks if the routed agent's provider has quota headroom; applies provider/model overrides from dashboard or request metadata.
+3. **Memory retrieval** — tag-filtered SQLite lookup with composite ranking (relevance 0.4 + importance 0.3 + recency 0.2 + policy 0.1).
+4. **PromptOS** — Jinja2 template assembly from `prompts/` (base → agent-specific → macros like `strategy.jinja`).
+5. **Agent execution** — `BaseAgent.execute(prompt, state)` streams LLM content with quota-aware fallback.
+6. **Plan Detection** — If `ULTRAPLAN` is used and outputs a `PlanGraph` JSON, `QueryEngine` parses it into `AgentState.execution_graph` and auto-transitions to `BUDDY`.
+7. **Multi-step Execution** — `BUDDY` iterates through the `PlanGraph` nodes, updating status and streaming each step.
+8. **EventBus** — broadcasts typed `Event` enum values (`TURN_START`, `AGENT_CHUNK`, `KAIROS_INTERRUPT`, `DELEGATION_START`, `DELEGATION_END`, etc.)
 
 ### Agents
 
@@ -77,10 +79,10 @@ ORCHESTRATOR (Tier 0) — provider: zhipu
        (Tier 1, zhipu)   (Tier 2, nvidia)
 ```
 
-- **AgentToolExecutor** (`src/execution/agent_tools.py`) — Intercepts `delegate_batch` and `spawn_workers` tool calls, creates fresh `AgentState` per task, runs all agents concurrently via `asyncio.gather()`. Falls through to `ToolExecutor` for standard tools (bash/read/write). Enforces max delegation depth (3).
-- **Multi-provider routing** — `BaseAgent.__init__(provider="nvidia")` creates a separate `AsyncOpenAI` client. Provider registry in `provider.py` caches clients per provider name. Env vars: `ZHIPU_API_KEY`, `NVIDIA_API_KEY`.
+- **AgentToolExecutor** (`src/execution/agent_tools.py`) — Intercepts `delegate_batch` and `spawn_workers` tool calls, creates fresh `AgentState` per task, runs all agents concurrently via `asyncio.gather()`. Falls through to `ToolExecutor` for standard tools (bash/read/write). Enforces max delegation depth (3). Supports per-task `provider`/`model` routing — creates fresh agents for each provider.
+- **Multi-provider routing** — `BaseAgent.__init__(provider="nvidia")` creates a separate `AsyncOpenAI` client. Provider registry in `provider.py` caches clients per provider name. Env vars: `LLM_API_KEY` (or `ZHIPU_API_KEY`), `NVIDIA_API_KEY`.
 - **Context scoping** — Each delegation creates `AgentState(session_id="del-...", history=[])` — no parent context leaks between tiers.
-- **Policy routing** — Keywords "multi-agent", "hierarchy", "delegate", "parallel" route to ORCHESTRATOR.
+- **Policy routing** — Keywords "multi-agent", "hierarchy", "delegate", "parallel", "at the same time", "all of these", "in parallel", "and also", "each of the following" route to ORCHESTRATOR. Structural multi-part detection (`_detect_multi_part()`) also routes to ORCHESTRATOR when input has 3+ comma-separated parts or 2+ structural pattern hits.
 
 | Tier | Agent | Provider | Role |
 |------|-------|----------|------|
@@ -99,14 +101,16 @@ Module-level `default_client` and `default_model` singletons for backward compat
 
 ### ResourceManager
 
-`src/core/resource_manager.py` — central provider registry with quota tracking and fallback chains. Registered in `main.py` at startup and wired into all agents via `set_resource_manager(rm, tier)`.
+`src/core/resource_manager.py` — central provider registry with quota tracking and fallback chains. Initialized via `ResourceManager.from_defaults()` in `main.py` at startup, wired into all agents via `set_resource_manager(rm, tier)`.
 
-- **ProviderProfile** — per-provider config: name, base_url, api_key_env, models, rate_limit, rate_window_secs, priority
+- **ProviderProfile** — per-provider config: name, base_url, api_key_env, models, rate_limit, rate_window_secs, priority. Defined in `DEFAULT_PROFILES` list — add new providers there.
+- **from_defaults()** — auto-registers all profiles from `DEFAULT_PROFILES`. Env vars override rate limits: `<PROVIDER>_RATE_LIMIT`, `<PROVIDER>_RATE_WINDOW`, `<PROVIDER>_PRIORITY` (e.g. `ZHIPU_RATE_LIMIT=200`).
 - **Quota tracking** — sliding window (timestamps pruned after `rate_window_secs`). `check_quota()` returns False when used >= rate_limit. rate_limit=0 means unlimited.
 - **Fallback chains** — per-tier ordered list of `(provider, model)` pairs. Planning tiers (ORCHESTRATOR, SUPERVISOR) prefer zhipu; worker tiers (BUDDY) prefer nvidia. On LLM failure, `stream_llm()` tries the next entry in the chain.
 - **Fallback chain example:** ORCHESTRATOR: `[(zhipu, glm-5.1), (zhipu, glm-5), (nvidia, llama-70b), ...]` — when zhipu quota is exhausted, automatically routes to nvidia.
-- **Dashboard integration** — provider/model dropdown in chat UI sends overrides via `PolicyDecision.provider_override`/`model_override`.
+- **Dashboard integration** — provider dropdown + model input in chat UI sends overrides via `PolicyDecision.provider_override`/`model_override`.
 - **Per-task routing** — `delegate_batch`/`spawn_workers` accept optional `provider`/`model` per task spec; `AgentToolExecutor` creates fresh agents for per-task providers.
+- **Startup** — prints quota status for all registered providers (e.g. `[provider] zhipu: 400/400 requests remaining`).
 
 ### EventBus
 
@@ -137,7 +141,7 @@ SQLite databases in `data/` (`memory.db`, `traces.db`, `wiki.db`) — gitignored
 
 | Tab | Purpose |
 |-----|---------|
-| **Chat** | Talk to JINN via `POST /api/chat` → QueryEngine |
+| **Chat** | Talk to JINN via `POST /api/chat` → QueryEngine (with provider/model selector) |
 | **Encyclopedia** | Browse JINN's internal knowledge base (wiki pages by category, search) |
 | **Memory** | View JINN's episodic memories with tags and importance |
 | **Traces** | Decision trace timeline (policy, memory, tool calls, outcomes) |
@@ -147,7 +151,7 @@ SQLite databases in `data/` (`memory.db`, `traces.db`, `wiki.db`) — gitignored
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /api/chat` | Send message to JINN via QueryEngine |
+| `POST /api/chat` | Send message to JINN (accepts optional `provider`/`model` overrides) |
 | `GET /api/status` | Version, uptime, active agents |
 | `GET /api/encyclopedia` | Encyclopedia index grouped by category |
 | `GET /api/encyclopedia/{id}` | Full encyclopedia page |
@@ -225,9 +229,10 @@ The wiki is JINN's internal encyclopedia — structured knowledge it builds and 
 - `test_dashboard.py` is excluded from pytest — its `aiohttp` server import hangs during collection
 - `BaseAgent` accepts optional `provider` param — pass `provider="nvidia"` to route to a different LLM; omit for default provider
 - `AgentToolExecutor` intercepts delegation tools (`delegate_batch`, `spawn_workers`) and runs agents in parallel via `asyncio.gather()`; falls through to `ToolExecutor` for bash/read/write/web tools
-- `ResourceManager` (`src/core/resource_manager.py`) tracks per-provider quotas via sliding window and builds fallback chains per agent tier; agents call `get_next_available(tier)` before LLM calls
-- `BaseAgent` has `_resource_manager` and `_tier` attributes (set via `set_resource_manager()`); `stream_llm()` checks quota before calling LLM and falls back through chain on failure
+- `ResourceManager` (`src/core/resource_manager.py`) tracks per-provider quotas via sliding window and builds fallback chains per agent tier; initialized via `from_defaults()` with `DEFAULT_PROFILES`; agents call `get_next_available(tier)` before LLM calls
+- `BaseAgent` has `_resource_manager` and `_tier` attributes (set via `set_resource_manager()`); `stream_llm()` checks quota before calling LLM and falls back through chain on failure; `_ensure_client(provider)` swaps the LLM client to a different provider
 - `PolicyDecision` has optional `provider_override`/`model_override` fields — set by dashboard chat or request metadata to force a specific provider/model
+- Provider rate limits are configurable via env vars: `<PROVIDER>_RATE_LIMIT`, `<PROVIDER>_RATE_WINDOW`, `<PROVIDER>_PRIORITY` (e.g. `ZHIPU_RATE_LIMIT=200`, `NVIDIA_PRIORITY=0`)
 - Web tools (`web_search`, `web_crawl`, `web_summarize`, `web_ask`, `web_see`, `web_look`) are defined in `src/execution/web_tools.py` as `WEB_TOOLS` list; added to all agent tool loops via `DEFAULT_TOOLS + WEB_TOOLS`
 - Self tools (`version_info`, `version_bump`, `test_run`, `git_commit_push`, `self_update`) are defined in `src/execution/self_tools.py` as `SELF_TOOLS` list; added via `DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS`
 - `WebToolsAdapter.is_available()` checks if web_eyes can be imported; `ToolExecutor.close_web()` shuts down the crawler at exit

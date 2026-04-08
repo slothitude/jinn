@@ -1,4 +1,8 @@
-"""SQLite-backed wiki store for structured knowledge pages."""
+"""SQLite-backed encyclopedia store — JINN's internal knowledge base.
+
+The wiki is JINN's encyclopedia: structured knowledge pages it builds
+(via the encyclopedia compiler) and references during cognition.
+"""
 
 from __future__ import annotations
 
@@ -48,7 +52,7 @@ class WikiPage:
 
 
 class WikiStore:
-    """SQLite-backed CRUD for wiki/knowledge pages."""
+    """SQLite-backed CRUD for JINN's encyclopedia pages."""
 
     def __init__(self, db_path: Optional[Path] = None) -> None:
         self.db_path = Path(db_path) if db_path else _DB_PATH
@@ -78,7 +82,7 @@ class WikiStore:
         self._conn.commit()
 
     def get_index(self) -> Dict[str, List[dict]]:
-        """Return pages grouped by category: {category: [{title, summary}, ...]}"""
+        """Return encyclopedia pages grouped by category."""
         rows = self._conn.execute(
             "SELECT title, category, summary FROM wiki_pages ORDER BY category, title"
         ).fetchall()
