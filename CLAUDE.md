@@ -7,10 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pip install -e ".[dev]"    # Install with dev dependencies
 python main.py             # Run the CLI REPL
+jinn                       # Run via PATH wrapper (after install.bat)
 pytest                     # Run all tests
 pytest tests/test_memory.py  # Run a single test file
 pytest -k "test_policy"    # Run tests by name pattern
 ```
+
+### REPL Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/restart` | Clear screen and continue session |
+| `/update` | `git pull origin master` and print result |
+| `/compile [dir] [--limit N] [--category name]` | Compile raw docs into wiki pages |
+| `quit` / `exit` | Shutdown |
 
 ## Architecture
 
@@ -27,6 +37,7 @@ JINN is a programmable cognition system — a multi-agent framework with an even
 | L5 | PromptOS (Jinja2 prompt assembly) | `src/promptos/engine.py` |
 | L6-L7 | Agents (execute + stream) | `src/agents/` |
 | L7.5 | AgentToolExecutor (batch delegation) | `src/execution/agent_tools.py` |
+| L7.6 | Self Tools (version, test, git) | `src/execution/self_tools.py` |
 | L8 | Feedback (safety monitors, trace logging) | `src.feedback/` |
 
 ### Request flow
@@ -124,6 +135,31 @@ SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 - **ToolExecutor dispatch** — All 6 web tools are dispatched from `ToolExecutor.execute()`. SUPERVISOR/ORCHESTRATOR call web tools via `AgentToolExecutor` fallthrough to `ToolExecutor`.
 - **Setup**: `git submodule add https://github.com/slothitude/web_eyes vendor/web_eyes`, `pip install -e ".[web]"`, `playwright install chromium`, SearXNG running, `NIM_API_KEY` in `.env`.
 
+### Self-Awareness & Self-Modification
+
+`src/core/version.py` provides `get_version()` and `get_git_info()` — single source of truth from `pyproject.toml`. Injected into all prompts via `PromptOS._build_context()` as `jinn_version`, `jinn_git_branch`, `jinn_git_commit`. Displayed in `base/system.jinja` `{% block self_awareness %}`.
+
+`src/execution/self_tools.py` provides 5 tools via `SelfToolsAdapter`:
+
+| Tool | Safety | Purpose |
+|------|--------|---------|
+| `version_info` | 0 | Read current version + git branch/commit |
+| `version_bump` | 1 | Bump major/minor/patch in pyproject.toml |
+| `test_run` | 0 | Run pytest subprocess, return pass/fail + output |
+| `git_commit_push` | 2 | Stage → commit → push. Runs tests first by default. |
+| `self_update` | 2 | `git pull origin master` |
+
+- **ToolExecutor dispatch** — All 5 self tools are dispatched from `ToolExecutor.execute()`, lazy-loaded via `SelfToolsAdapter`.
+- **`git_commit_push` flow** — if `test_first=true`, runs pytest first; aborts if tests fail, then stages/commits/pushes.
+- **`version_bump` flow** — regex parses `pyproject.toml`, increments the specified component, writes back.
+- **PromptOS** — `self_tools` added to tool list: `DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS`.
+- **BUDDY** — `self_tools` added to tool loop. `buddy.jinja` includes self-modification protocol (test → bump → commit+push).
+
+### Windows Install
+
+- **`jinn.bat`** — thin wrapper: `python main.py %*` for PATH execution.
+- **`install.bat`** — checks Python 3.11+, runs `pip install -e .[dev]`, adds project dir to user PATH. Double-click to install.
+
 ## Conventions
 - Python 3.11+, Pydantic v2 for models, Jinja2 for templates, aiofiles for async I/O
 - `openai>=1.0` for LLM provider, `httpx` for reliable async HTTP on Windows; fallback chain: `glm-5.1 → glm-5 → glm-5-turbo → glm-4.7 → glm-4.6 → glm-4.5-air`
@@ -140,5 +176,7 @@ SQLite databases in `data/` (`memory.db`, `traces.db`) — gitignored.
 - `BaseAgent` accepts optional `provider` param — pass `provider="nvidia"` to route to a different LLM; omit for default provider
 - `AgentToolExecutor` intercepts delegation tools (`delegate_batch`, `spawn_workers`) and runs agents in parallel via `asyncio.gather()`; falls through to `ToolExecutor` for bash/read/write/web tools
 - Web tools (`web_search`, `web_crawl`, `web_summarize`, `web_ask`, `web_see`, `web_look`) are defined in `src/execution/web_tools.py` as `WEB_TOOLS` list; added to all agent tool loops via `DEFAULT_TOOLS + WEB_TOOLS`
+- Self tools (`version_info`, `version_bump`, `test_run`, `git_commit_push`, `self_update`) are defined in `src/execution/self_tools.py` as `SELF_TOOLS` list; added via `DEFAULT_TOOLS + WEB_TOOLS + SELF_TOOLS`
 - `WebToolsAdapter.is_available()` checks if web_eyes can be imported; `ToolExecutor.close_web()` shuts down the crawler at exit
 - Install web extras: `pip install -e ".[web]"` — core JINN works without them
+- Windows install: run `install.bat` to install + add to PATH, then `jinn` to launch
