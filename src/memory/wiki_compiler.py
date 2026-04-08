@@ -171,8 +171,8 @@ class WikiCompiler:
         import os
 
         profile = PROVIDERS["nvidia"]
-        api_key = os.getenv("LLM_API_KEY", "") or os.getenv("NVIDIA_API_KEY", "")
-        base_url = os.getenv("LLM_BASE_URL", "") or profile["base_url"]
+        api_key = os.getenv("NVIDIA_API_KEY", "")
+        base_url = profile["base_url"]
         model = "google/gemma-4-31b-it"
 
         return await asyncio.wait_for(
